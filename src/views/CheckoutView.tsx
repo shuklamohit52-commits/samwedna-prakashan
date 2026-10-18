@@ -89,8 +89,8 @@ export const CheckoutView: React.FC = () => {
     );
   }
 
-  // Handle address submit & open Razorpay
-  const handleProceedToRazorpay = (e: React.FormEvent) => {
+  // Real Razorpay Standard Web Checkout flow
+  const handleProceedToRazorpay = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!fullName.trim() || !phone.trim() || !street.trim() || !city.trim() || !pinCode.trim()) {
       showToast('Please fill in complete delivery address details', 'error');
@@ -100,71 +100,206 @@ export const CheckoutView: React.FC = () => {
       showToast('Please enter a valid 6-digit Indian PIN code', 'error');
       return;
     }
-    setShowRazorpayModal(true);
-    setPaymentStep('idle');
-  };
 
-  // Simulate Razorpay Gateway Transaction
-  const handleCompleteRazorpayPayment = async () => {
+    if (typeof (window as any).Razorpay === 'undefined') {
+      showToast('Razorpay checkout SDK is loading, please wait a moment...', 'info');
+      return;
+    }
+
     setIsProcessingPayment(true);
-    setPaymentStep('processing');
+    showToast('Creating secure Razorpay order...', 'info');
 
-    // Simulate 1.8s realistic bank authentication
-    setTimeout(async () => {
-      setIsProcessingPayment(false);
-      setPaymentStep('success');
+    try {
+      // Step 1: Backend creates order
+      const res = await fetch('/api/create-order', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          amount: Math.round(totalAmount * 100), // paise (minimum 100)
+          currency: 'INR',
+          receipt: `rcpt_bb_${Date.now()}`,
+          notes: {
+            customerName: fullName,
+            email: user?.email || 'guest@booksboon.com',
+            phone,
+            deliverySpeed,
+          },
+        }),
+      });
 
-      try {
-        confetti({
-          particleCount: 120,
-          spread: 70,
-          origin: { y: 0.6 }
-        });
-      } catch (err) {
-        console.warn('Confetti error:', err);
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        throw new Error(errData.error || `Server responded with status ${res.status}`);
       }
 
-      const generatedOrderId = `BB-ORD-${Math.floor(100000 + Math.random() * 900000)}`;
-      const trackingNumber = `IP-EXP-2026-${Math.floor(1000 + Math.random() * 9000)}IN`;
-      const paymentId = activePaymentMethod === 'cod' ? 'COD_PENDING' : `pay_rzp_${Date.now().toString(36)}`;
+      const orderData = await res.json();
+      const razorpayKey = (import.meta as any).env.VITE_RAZORPAY_KEY_ID || 'rzp_test_TpIjIwCL0MqGjE';
 
-      const newOrder: HardCopyOrder = {
-        orderId: generatedOrderId,
-        trackingId: trackingNumber,
-        createdAt: new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }),
-        studentEmail: user?.email || 'shukla.mohit52@gmail.com',
-        studentName: fullName,
-        phone,
-        address: {
-          street,
-          city,
-          state,
-          pinCode,
-          landmark
+      // Step 2: Open official Razorpay modal with order_id
+      const options = {
+        key: razorpayKey,
+        amount: orderData.amount,
+        currency: orderData.currency || 'INR',
+        name: 'BooksBoon (Samwedna Prakashan)',
+        description: 'Hard Copy Printed Textbooks & Magazines',
+        image: 'https://cdn.jsdelivr.net/gh/luckymohittiwari52-oss/quiz-assets@main/images/bokbon.jpg',
+        order_id: orderData.order_id,
+        prefill: {
+          name: fullName,
+          email: user?.email || '',
+          contact: phone,
         },
-        items: cart.map(item => ({
-          bookId: item.book.id,
-          title: item.book.title,
-          format: item.format,
-          quantity: item.quantity,
-          price: item.format === 'Paperback' ? item.book.paperbackPrice : (item.format === 'Magazine' ? item.book.paperbackPrice : Math.round(item.book.paperbackPrice * 0.45)),
-          coverImage: item.book.bannerImage
-        })),
-        subtotal: cartSubtotal,
-        shippingFee: shippingFee + expressFee,
-        totalAmount,
-        paymentMethod: activePaymentMethod === 'upi' ? 'UPI' : (activePaymentMethod === 'card' ? 'Card' : (activePaymentMethod === 'cod' ? 'COD' : 'Razorpay')),
-        paymentId,
-        paymentStatus: activePaymentMethod === 'cod' ? 'Pending' : 'Paid',
-        shippingStatus: 'Processing',
-        courierPartner: deliverySpeed === 'express' ? 'Bluedart Express Courier' : 'India Post Speed Post',
-        estimatedDelivery: new Date(Date.now() + 4 * 86400000).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })
+        notes: {
+          address: `${street}, ${city}, ${state} - ${pinCode}`,
+          shippingPartner: deliverySpeed === 'express' ? 'Bluedart Air Express' : 'India Post Speed Post',
+        },
+        theme: {
+          color: '#059669', // Professional Emerald Green
+        },
+        handler: async function (response: any) {
+          // Step 3: Backend signature verification
+          try {
+            showToast('Verifying payment signature with Razorpay...', 'info');
+            const verifyRes = await fetch('/api/verify-payment', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify({
+                razorpay_order_id: response.razorpay_order_id,
+                razorpay_payment_id: response.razorpay_payment_id,
+                razorpay_signature: response.razorpay_signature,
+              }),
+            });
+
+            const verifyData = await verifyRes.json();
+
+            if (verifyRes.ok && verifyData.success) {
+              try {
+                confetti({
+                  particleCount: 120,
+                  spread: 70,
+                  origin: { y: 0.6 }
+                });
+              } catch (err) {
+                console.warn('Confetti error:', err);
+              }
+
+              const trackingNumber = `IP-EXP-2026-${Math.floor(1000 + Math.random() * 9000)}IN`;
+              const newOrder: HardCopyOrder = {
+                orderId: response.razorpay_order_id || `BB-ORD-${Math.floor(100000 + Math.random() * 900000)}`,
+                trackingId: trackingNumber,
+                createdAt: new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }),
+                studentEmail: user?.email || 'shukla.mohit52@gmail.com',
+                studentName: fullName,
+                phone,
+                address: {
+                  street,
+                  city,
+                  state,
+                  pinCode,
+                  landmark
+                },
+                items: cart.map(item => ({
+                  bookId: item.book.id,
+                  title: item.book.title,
+                  format: item.format,
+                  quantity: item.quantity,
+                  price: item.format === 'Paperback' ? item.book.paperbackPrice : (item.format === 'Magazine' ? item.book.paperbackPrice : Math.round(item.book.paperbackPrice * 0.45)),
+                  coverImage: item.book.bannerImage
+                })),
+                subtotal: cartSubtotal,
+                shippingFee: shippingFee + expressFee,
+                totalAmount,
+                paymentMethod: 'Razorpay',
+                paymentId: response.razorpay_payment_id,
+                paymentStatus: 'Paid',
+                shippingStatus: 'Processing',
+                courierPartner: deliverySpeed === 'express' ? 'Bluedart Express Courier' : 'India Post Speed Post',
+                estimatedDelivery: new Date(Date.now() + 4 * 86400000).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })
+              };
+
+              await placeOrder(newOrder);
+              setConfirmedOrder(newOrder);
+              showToast('Payment verified successfully via Razorpay!', 'success');
+            } else {
+              showToast(verifyData.error || 'Payment signature mismatch. Transaction not marked as paid.', 'error');
+            }
+          } catch (err: any) {
+            console.error('Verification error:', err);
+            showToast(err?.message || 'Failed to verify payment', 'error');
+          } finally {
+            setIsProcessingPayment(false);
+          }
+        },
+        modal: {
+          ondismiss: function () {
+            showToast('Razorpay checkout window was dismissed.', 'info');
+            setIsProcessingPayment(false);
+          },
+        },
       };
 
-      await placeOrder(newOrder);
-      setConfirmedOrder(newOrder);
-      setShowRazorpayModal(false);
-    }, 1800);
+      const rzpInstance = new (window as any).Razorpay(options);
+      rzpInstance.on('payment.failed', function (failResp: any) {
+        console.error('Razorpay payment failed:', failResp);
+        showToast(`Payment Failed: ${failResp?.error?.description || 'Bank transaction declined'}`, 'error');
+        setIsProcessingPayment(false);
+      });
+      rzpInstance.open();
+    } catch (err: any) {
+      console.error('Error starting Razorpay checkout:', err);
+      showToast(err?.message || 'Failed to initiate Razorpay checkout', 'error');
+      setIsProcessingPayment(false);
+    }
+  };
+
+  // Alternative Cash on Delivery Option
+  const handlePlaceCodOrder = async () => {
+    if (!fullName.trim() || !phone.trim() || !street.trim() || !city.trim() || !pinCode.trim()) {
+      showToast('Please fill in complete delivery address details before placing COD order', 'error');
+      return;
+    }
+    setIsProcessingPayment(true);
+    const trackingNumber = `IP-EXP-2026-${Math.floor(1000 + Math.random() * 9000)}IN`;
+    const newOrder: HardCopyOrder = {
+      orderId: `BB-COD-${Math.floor(100000 + Math.random() * 900000)}`,
+      trackingId: trackingNumber,
+      createdAt: new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }),
+      studentEmail: user?.email || 'shukla.mohit52@gmail.com',
+      studentName: fullName,
+      phone,
+      address: {
+        street,
+        city,
+        state,
+        pinCode,
+        landmark
+      },
+      items: cart.map(item => ({
+        bookId: item.book.id,
+        title: item.book.title,
+        format: item.format,
+        quantity: item.quantity,
+        price: item.format === 'Paperback' ? item.book.paperbackPrice : (item.format === 'Magazine' ? item.book.paperbackPrice : Math.round(item.book.paperbackPrice * 0.45)),
+        coverImage: item.book.bannerImage
+      })),
+      subtotal: cartSubtotal,
+      shippingFee: shippingFee + expressFee,
+      totalAmount,
+      paymentMethod: 'COD',
+      paymentId: 'COD_ON_DELIVERY',
+      paymentStatus: 'Pending',
+      shippingStatus: 'Processing',
+      courierPartner: deliverySpeed === 'express' ? 'Bluedart Express Courier' : 'India Post Speed Post',
+      estimatedDelivery: new Date(Date.now() + 4 * 86400000).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })
+    };
+
+    await placeOrder(newOrder);
+    setConfirmedOrder(newOrder);
+    setIsProcessingPayment(false);
   };
 
   // Order Confirmed Screen
@@ -493,14 +628,39 @@ export const CheckoutView: React.FC = () => {
                 </div>
               </div>
 
-              <div className="pt-4">
+              <div className="pt-4 space-y-3">
                 <button
                   type="submit"
-                  className="w-full py-3.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-sm shadow-md hover:shadow-lg transition-all flex items-center justify-center gap-2 cursor-pointer"
+                  disabled={isProcessingPayment}
+                  className="w-full py-3.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-sm shadow-md hover:shadow-lg transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
                 >
-                  <Lock className="w-4 h-4" />
-                  <span>Proceed to Pay ₹{totalAmount} with Razorpay</span>
+                  {isProcessingPayment ? (
+                    <>
+                      <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                      <span>Opening Secure Razorpay Gateway...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Lock className="w-4 h-4" />
+                      <span>Pay ₹{totalAmount} with Razorpay (Cards, UPI, NetBanking)</span>
+                    </>
+                  )}
                 </button>
+
+                <div className="flex items-center justify-between p-3 bg-slate-50 border border-slate-200 rounded-xl text-xs">
+                  <div>
+                    <span className="font-semibold text-slate-800 block">Prefer Cash on Delivery?</span>
+                    <span className="text-[11px] text-slate-500">Pay cash upon delivery to courier executive</span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={handlePlaceCodOrder}
+                    disabled={isProcessingPayment}
+                    className="px-3 py-1.5 rounded-lg border border-slate-300 text-xs font-bold text-slate-700 hover:bg-slate-100 cursor-pointer disabled:opacity-50"
+                  >
+                    Place COD Order
+                  </button>
+                </div>
               </div>
             </form>
           </div>
@@ -510,7 +670,16 @@ export const CheckoutView: React.FC = () => {
         <div className="lg:col-span-5 space-y-6">
           <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 space-y-6">
             <div className="flex items-center justify-between pb-4 border-b border-slate-100">
-              <h3 className="font-bold text-sm text-slate-900">BooksBoon Order Summary</h3>
+              <div className="flex items-center gap-2">
+                <div className="w-7 h-7 rounded-lg overflow-hidden border border-amber-300 bg-white p-0.5 shadow-xs shrink-0">
+                  <img 
+                    src="https://cdn.jsdelivr.net/gh/luckymohittiwari52-oss/quiz-assets@main/images/bokbon.jpg" 
+                    alt="BooksBoon" 
+                    className="w-full h-full object-contain"
+                  />
+                </div>
+                <h3 className="font-bold text-sm text-slate-900">BooksBoon Order Summary</h3>
+              </div>
               <span className="text-xs font-semibold text-slate-500">{cartCount} Item(s)</span>
             </div>
 
@@ -557,7 +726,7 @@ export const CheckoutView: React.FC = () => {
 
               <div className="flex justify-between text-base font-extrabold text-slate-900 pt-3 border-t border-slate-200">
                 <span>Grand Total</span>
-                <span className="text-indigo-700">₹{totalAmount}</span>
+                <span className="text-emerald-700">₹{totalAmount}</span>
               </div>
             </div>
 
@@ -574,225 +743,6 @@ export const CheckoutView: React.FC = () => {
         </div>
 
       </div>
-
-      {/* RAZORPAY GATEWAY MODAL */}
-      {showRazorpayModal && (
-        <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 animate-fadeIn">
-          <div 
-            className="bg-white rounded-2xl max-w-lg w-full shadow-2xl border border-slate-300 overflow-hidden flex flex-col"
-            onClick={(e) => e.stopPropagation()}
-          >
-            {/* Razorpay Brand Header */}
-            <div className="bg-[#0c2340] text-white p-5 flex items-center justify-between border-b border-slate-800">
-              <div className="flex items-center gap-3">
-                <div className="w-8 h-8 rounded-lg bg-[#3399cc] flex items-center justify-center text-white font-black text-sm">
-                  R
-                </div>
-                <div>
-                  <div className="flex items-center gap-2">
-                    <span className="text-sm font-bold tracking-tight">Razorpay</span>
-                    <span className="text-[10px] bg-white/10 px-1.5 py-0.2 rounded font-semibold text-cyan-300">TRUSTED</span>
-                  </div>
-                  <span className="text-[11px] text-slate-300 block">BooksBoon (Samwedna Prakashan)</span>
-                </div>
-              </div>
-
-              <div className="text-right">
-                <span className="text-[10px] text-slate-400 block uppercase">Amount to Pay</span>
-                <span className="text-xl font-extrabold text-white">₹{totalAmount}</span>
-              </div>
-            </div>
-
-            {/* Payment Method Selector Tabs */}
-            <div className="grid grid-cols-4 border-b border-slate-200 text-xs font-semibold bg-slate-50">
-              <button
-                onClick={() => setActivePaymentMethod('upi')}
-                className={`py-3 px-2 flex flex-col items-center gap-1 border-b-2 transition-colors cursor-pointer ${
-                  activePaymentMethod === 'upi' ? 'border-[#3399cc] text-[#0c2340] bg-white' : 'border-transparent text-slate-500'
-                }`}
-              >
-                <QrCode className="w-4 h-4 text-[#3399cc]" />
-                <span>UPI / QR</span>
-              </button>
-
-              <button
-                onClick={() => setActivePaymentMethod('card')}
-                className={`py-3 px-2 flex flex-col items-center gap-1 border-b-2 transition-colors cursor-pointer ${
-                  activePaymentMethod === 'card' ? 'border-[#3399cc] text-[#0c2340] bg-white' : 'border-transparent text-slate-500'
-                }`}
-              >
-                <CreditCard className="w-4 h-4 text-emerald-600" />
-                <span>Card</span>
-              </button>
-
-              <button
-                onClick={() => setActivePaymentMethod('netbanking')}
-                className={`py-3 px-2 flex flex-col items-center gap-1 border-b-2 transition-colors cursor-pointer ${
-                  activePaymentMethod === 'netbanking' ? 'border-[#3399cc] text-[#0c2340] bg-white' : 'border-transparent text-slate-500'
-                }`}
-              >
-                <Building2 className="w-4 h-4 text-amber-600" />
-                <span>NetBanking</span>
-              </button>
-
-              <button
-                onClick={() => setActivePaymentMethod('cod')}
-                className={`py-3 px-2 flex flex-col items-center gap-1 border-b-2 transition-colors cursor-pointer ${
-                  activePaymentMethod === 'cod' ? 'border-[#3399cc] text-[#0c2340] bg-white' : 'border-transparent text-slate-500'
-                }`}
-              >
-                <Banknote className="w-4 h-4 text-purple-600" />
-                <span>COD</span>
-              </button>
-            </div>
-
-            {/* Tab Contents */}
-            <div className="p-6 space-y-4">
-              
-              {/* UPI Tab */}
-              {activePaymentMethod === 'upi' && (
-                <div className="space-y-4 text-center">
-                  <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200 inline-block mx-auto shadow-inner">
-                    <img 
-                      src={`https://api.qrserver.com/v1/create-qr-code/?size=160x160&data=upi://pay?pa=booksboon17@okaxis&pn=BooksBoon&am=${totalAmount}&cu=INR`}
-                      alt="Razorpay Dynamic UPI QR"
-                      className="w-36 h-36 mx-auto rounded-lg"
-                    />
-                    <span className="text-[10px] text-slate-500 mt-2 block font-medium">Scan with any UPI App</span>
-                  </div>
-
-                  <div className="flex items-center justify-center gap-3 text-xs text-slate-600">
-                    <span className="font-semibold text-slate-800">Supported:</span>
-                    <span className="px-2 py-0.5 bg-slate-100 rounded text-slate-700 font-bold">GPay</span>
-                    <span className="px-2 py-0.5 bg-slate-100 rounded text-slate-700 font-bold">PhonePe</span>
-                    <span className="px-2 py-0.5 bg-slate-100 rounded text-slate-700 font-bold">Paytm</span>
-                    <span className="px-2 py-0.5 bg-slate-100 rounded text-slate-700 font-bold">BHIM</span>
-                  </div>
-
-                  <div className="relative text-left">
-                    <label className="block text-[11px] font-semibold text-slate-700 mb-1">Or enter UPI ID / VPA</label>
-                    <input
-                      type="text"
-                      value={upiId}
-                      onChange={(e) => setUpiId(e.target.value)}
-                      placeholder="e.g. yourname@okhdfcbank"
-                      className="w-full px-3 py-2 text-xs rounded-xl border border-slate-300 focus:ring-2 focus:ring-[#3399cc] focus:outline-hidden"
-                    />
-                  </div>
-                </div>
-              )}
-
-              {/* Card Tab */}
-              {activePaymentMethod === 'card' && (
-                <div className="space-y-3 text-left">
-                  <div>
-                    <label className="block text-[11px] font-semibold text-slate-700 mb-1">Card Number</label>
-                    <input
-                      type="text"
-                      maxLength={19}
-                      value={cardNumber}
-                      onChange={(e) => setCardNumber(e.target.value.replace(/\D/g, '').replace(/(.{4})/g, '$1 ').trim())}
-                      placeholder="4532 8912 3456 7890"
-                      className="w-full px-3 py-2 text-xs font-mono rounded-xl border border-slate-300 focus:ring-2 focus:ring-[#3399cc] focus:outline-hidden"
-                    />
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-3">
-                    <div>
-                      <label className="block text-[11px] font-semibold text-slate-700 mb-1">Expiry (MM/YY)</label>
-                      <input
-                        type="text"
-                        maxLength={5}
-                        value={cardExpiry}
-                        onChange={(e) => setCardExpiry(e.target.value)}
-                        placeholder="12/28"
-                        className="w-full px-3 py-2 text-xs font-mono rounded-xl border border-slate-300 focus:ring-2 focus:ring-[#3399cc] focus:outline-hidden"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-[11px] font-semibold text-slate-700 mb-1">CVV</label>
-                      <input
-                        type="password"
-                        maxLength={3}
-                        value={cardCvv}
-                        onChange={(e) => setCardCvv(e.target.value.replace(/\D/g, ''))}
-                        placeholder="•••"
-                        className="w-full px-3 py-2 text-xs font-mono rounded-xl border border-slate-300 focus:ring-2 focus:ring-[#3399cc] focus:outline-hidden"
-                      />
-                    </div>
-                  </div>
-
-                  <div>
-                    <label className="block text-[11px] font-semibold text-slate-700 mb-1">Name on Card</label>
-                    <input
-                      type="text"
-                      value={cardName}
-                      onChange={(e) => setCardName(e.target.value)}
-                      placeholder="MOHIT SHUKLA"
-                      className="w-full px-3 py-2 text-xs uppercase rounded-xl border border-slate-300 focus:ring-2 focus:ring-[#3399cc] focus:outline-hidden"
-                    />
-                  </div>
-                </div>
-              )}
-
-              {/* NetBanking Tab */}
-              {activePaymentMethod === 'netbanking' && (
-                <div className="space-y-3">
-                  <label className="block text-xs font-semibold text-slate-700 mb-1">Select Bank</label>
-                  <div className="grid grid-cols-3 gap-2">
-                    {['SBI', 'HDFC', 'ICICI', 'Axis', 'PNB', 'Kotak'].map((b) => (
-                      <button
-                        key={b}
-                        onClick={() => setSelectedBank(b)}
-                        className={`p-2.5 rounded-xl border text-xs font-bold transition-all cursor-pointer ${
-                          selectedBank === b ? 'border-[#3399cc] bg-cyan-50 text-[#0c2340]' : 'border-slate-200 hover:border-slate-300 text-slate-700'
-                        }`}
-                      >
-                        {b} Bank
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {/* Cash On Delivery Tab */}
-              {activePaymentMethod === 'cod' && (
-                <div className="p-4 rounded-xl bg-amber-50 border border-amber-200 text-xs text-amber-900 space-y-2">
-                  <span className="font-bold block">Cash on Delivery Available</span>
-                  <p>Pay cash directly to the courier executive upon physical inspection of books package.</p>
-                </div>
-              )}
-
-              {/* Action Button */}
-              <div className="pt-3">
-                <button
-                  onClick={handleCompleteRazorpayPayment}
-                  disabled={isProcessingPayment}
-                  className="w-full py-3.5 rounded-xl bg-[#3399cc] hover:bg-[#287da8] text-white font-bold text-sm shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
-                >
-                  {isProcessingPayment ? (
-                    <>
-                      <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                      <span>Verifying with Razorpay...</span>
-                    </>
-                  ) : (
-                    <>
-                      <Lock className="w-4 h-4" />
-                      <span>Pay ₹{totalAmount} Now</span>
-                    </>
-                  )}
-                </button>
-              </div>
-
-              <div className="flex items-center justify-between text-[10px] text-slate-400 pt-2 border-t border-slate-100">
-                <span>Secured by Razorpay Payments</span>
-                <span>PCI-DSS Level 1 Compliant</span>
-              </div>
-
-            </div>
-          </div>
-        </div>
-      )}
 
     </div>
   );

@@ -24,7 +24,7 @@ import {
 } from '../services/firebase';
 
 export const SignInView: React.FC = () => {
-  const { loginUser, registerUser, showToast } = useApp();
+  const { loginUser, registerUser, showToast, isRegisteredStudent, verifyStudentCredentials } = useApp();
   
   // Tab: 'signin' or 'signup'
   const [activeTab, setActiveTab] = useState<'signin' | 'signup'>('signin');
@@ -113,11 +113,13 @@ export const SignInView: React.FC = () => {
     }
   };
 
-  // Handle Real Email Sign In via Firebase
+  // Handle Real Email Sign In via Firebase & Strict Registered Accounts verification
   const handleEmailSignIn = async (e: React.FormEvent) => {
     e.preventDefault();
     setAuthError(null);
-    if (!signInEmail.trim()) {
+    const cleanEmail = signInEmail.trim().toLowerCase();
+
+    if (!cleanEmail) {
       setAuthError('Please enter your email address');
       showToast('Please enter your email address', 'error');
       return;
@@ -129,22 +131,40 @@ export const SignInView: React.FC = () => {
     }
 
     setIsLoading(true);
+
     try {
-      const { user, error } = await loginWithEmail(signInEmail, signInPassword);
-      if (error) {
-        setAuthError(error);
-        showToast(error, 'error');
-        setIsLoading(false);
-        return;
-      }
+      // 1. Try Firebase Auth
+      const { user } = await loginWithEmail(cleanEmail, signInPassword);
+
       if (user) {
         loginUser(
-          user.email || signInEmail.trim(), 
+          user.email || cleanEmail, 
           user.displayName || undefined, 
           user.phoneNumber || undefined, 
           'email'
         );
+        setIsLoading(false);
+        return;
       }
+
+      // 2. Strict account check: does this student account exist in registered records?
+      const check = verifyStudentCredentials(cleanEmail, signInPassword);
+
+      if (!check.valid) {
+        if (check.reason === 'not_found') {
+          const msg = 'No student account found with this email. You must click "Create Account" below and sign up first before signing in.';
+          setAuthError(msg);
+          showToast('Account not found. Please Sign Up first.', 'error');
+        } else {
+          setAuthError('Incorrect password. Please verify your password and try again.');
+          showToast('Incorrect password.', 'error');
+        }
+        setIsLoading(false);
+        return;
+      }
+
+      // Valid registered student
+      loginUser(cleanEmail, undefined, undefined, 'email');
     } catch (err: any) {
       const msg = err?.message || 'Sign in failed. Please verify your credentials.';
       setAuthError(msg);
@@ -199,7 +219,8 @@ export const SignInView: React.FC = () => {
             phone: signUpPhone.trim() || '+91 97929 03247',
             targetExam: signUpExam
           },
-          signUpPlan
+          signUpPlan,
+          signUpPassword
         );
       }
     } catch (err: any) {
@@ -237,7 +258,24 @@ export const SignInView: React.FC = () => {
     <div className="min-h-[85vh] py-12 px-4 sm:px-6 lg:px-8 bg-gradient-to-b from-slate-100 via-indigo-50/30 to-slate-100 animate-fadeIn flex flex-col justify-center items-center">
       
       {/* Branding Header */}
-      <div className="text-center max-w-lg mb-8 space-y-2">
+      <div className="text-center max-w-lg mb-8 space-y-3">
+        <div className="flex items-center justify-center -space-x-3 mb-2">
+          <div className="w-14 h-14 rounded-2xl overflow-hidden bg-white border-2 border-amber-300 shadow-lg flex items-center justify-center p-1 z-10 shrink-0">
+            <img 
+              src="https://cdn.jsdelivr.net/gh/luckymohittiwari52-oss/quiz-assets@main/images/bokbon.jpg" 
+              alt="BooksBoon Logo" 
+              className="w-full h-full object-contain rounded-xl"
+            />
+          </div>
+          <div className="w-14 h-14 rounded-2xl overflow-hidden bg-white border-2 border-indigo-400 shadow-lg flex items-center justify-center p-1 z-0 shrink-0">
+            <img 
+              src="https://cdn.jsdelivr.net/gh/luckymohittiwari52-oss/quiz-assets@main/images/sjgj.jpg" 
+              alt="Samwedna Group of Institutes Logo" 
+              className="w-full h-full object-contain rounded-xl"
+            />
+          </div>
+        </div>
+
         <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-indigo-50 border border-indigo-200 text-indigo-700 text-xs font-bold uppercase tracking-wider">
           <GraduationCap className="w-4 h-4 text-indigo-600" />
           <span>Unified Student & Reader Portal</span>
@@ -293,10 +331,23 @@ export const SignInView: React.FC = () => {
 
         {/* Auth Error Banner if any */}
         {authError && (
-          <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-xl flex items-start gap-2.5 text-xs text-red-800 animate-fadeIn">
+          <div className="mb-4 p-3.5 bg-red-50 border border-red-200 rounded-2xl flex items-start gap-2.5 text-xs text-red-800 animate-fadeIn">
             <AlertCircle className="w-4 h-4 text-red-600 shrink-0 mt-0.5" />
             <div className="flex-1">
-              <p className="font-semibold">{authError}</p>
+              <p className="font-semibold leading-relaxed">{authError}</p>
+              {authError.includes('sign up first') && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setActiveTab('signup');
+                    setSignUpEmail(signInEmail);
+                    setAuthError(null);
+                  }}
+                  className="mt-2 inline-flex items-center gap-1.5 px-3 py-1 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg font-bold text-[11px] transition-colors cursor-pointer shadow-xs"
+                >
+                  <span>Click to Create Account with this email →</span>
+                </button>
+              )}
             </div>
             <button 
               onClick={() => setAuthError(null)} 
@@ -556,9 +607,14 @@ export const SignInView: React.FC = () => {
 
             {/* Plan selection */}
             <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1.5">
-                Membership Pass
-              </label>
+              <div className="flex items-center justify-between mb-1.5">
+                <label className="text-xs font-semibold text-slate-700">
+                  Membership Pass
+                </label>
+                <span className="text-[10px] bg-emerald-100 text-emerald-800 font-bold px-2 py-0.5 rounded-full">
+                  100% Free Offer Active (₹0 Fees)
+                </span>
+              </div>
               <div className="grid grid-cols-2 gap-2">
                 <div
                   onClick={() => setSignUpPlan('free')}
@@ -573,14 +629,20 @@ export const SignInView: React.FC = () => {
                 </div>
                 <div
                   onClick={() => setSignUpPlan('yearly')}
-                  className={`p-2.5 rounded-xl border text-xs cursor-pointer transition-all ${
+                  className={`p-2.5 rounded-xl border text-xs cursor-pointer transition-all relative ${
                     signUpPlan === 'yearly'
-                      ? 'border-indigo-600 bg-indigo-50 text-indigo-950 font-bold'
+                      ? 'border-emerald-600 bg-emerald-50/80 text-emerald-950 font-bold ring-2 ring-emerald-500/20'
                       : 'border-slate-200 text-slate-600 hover:border-slate-300'
                   }`}
                 >
+                  <span className="absolute -top-2 right-2 bg-emerald-600 text-white text-[9px] font-extrabold px-1.5 py-0.2 rounded-full">
+                    FREE NOW
+                  </span>
                   <p className="font-bold">Yearly Elite Pass</p>
-                  <p className="text-[10px] text-slate-500">₹999/yr (All-India CBT Test Series)</p>
+                  <p className="text-[10px] text-slate-500">
+                    <span className="line-through text-slate-400 mr-1">₹999/yr</span>
+                    <strong className="text-emerald-700">₹0 Free Scholarship</strong>
+                  </p>
                 </div>
               </div>
             </div>

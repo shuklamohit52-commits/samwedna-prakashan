@@ -565,9 +565,18 @@ export const StudentDashboardView: React.FC = () => {
       {accountTab === 'orders' && (
         <div className="space-y-6">
           <div className="flex items-center justify-between">
-            <div>
-              <h2 className="text-base font-bold text-slate-900">BooksBoon Physical Hard Copy Orders</h2>
-              <p className="text-xs text-slate-500">Track delivery status via India Post Speed Post & Courier Partners</p>
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl overflow-hidden bg-white border border-amber-300 p-0.5 shadow-xs shrink-0">
+                <img 
+                  src="https://cdn.jsdelivr.net/gh/luckymohittiwari52-oss/quiz-assets@main/images/bokbon.jpg" 
+                  alt="BooksBoon" 
+                  className="w-full h-full object-contain"
+                />
+              </div>
+              <div>
+                <h2 className="text-base font-bold text-slate-900">BooksBoon Physical Hard Copy Orders</h2>
+                <p className="text-xs text-slate-500">Track delivery status via India Post Speed Post & Courier Partners</p>
+              </div>
             </div>
             <button
               onClick={() => {

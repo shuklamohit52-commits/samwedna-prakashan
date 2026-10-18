@@ -24,7 +24,8 @@ import {
   FREE_PDFS_DATA,
   STUDY_MATERIALS_DATA,
   VIDEO_LECTURES,
-  INITIAL_ORDERS
+  INITIAL_ORDERS,
+  INITIAL_STUDENTS
 } from '../data/mockData';
 import { OrdersService, TestScoresService } from '../services/supabase';
 import { 
@@ -65,6 +66,8 @@ interface AppContextType {
   // Institute Current Affairs
   currentAffairs: CurrentAffairArticle[];
   addCurrentAffair: (article: CurrentAffairArticle) => void;
+  updateCurrentAffair: (article: CurrentAffairArticle) => void;
+  deleteCurrentAffair: (id: string) => void;
   bookmarkCurrentAffair: (id: string) => void;
 
   // Institute Free PDFs & Study Material
@@ -102,11 +105,15 @@ interface AppContextType {
   setReadingEbook: (book: DownloadedBook | null) => void;
   downloadBookToLibrary: (book: Book) => { success: boolean; reason?: string };
 
-  // Auth & Admin
+  // Auth & Admin & Students Directory
   isAdmin: boolean;
+  studentsList: UserProfile[];
+  isRegisteredStudent: (email: string) => boolean;
+  verifyStudentCredentials: (email: string, password: string) => { valid: boolean; reason?: 'not_found' | 'wrong_password' | 'admin' };
+  updateStudentDetails: (studentId: string, data: Partial<UserProfile>) => void;
   loginUser: (email: string, name?: string, phone?: string, provider?: 'email' | 'google' | 'facebook', avatar?: string, targetExam?: string) => void;
   logoutUser: () => void;
-  registerUser: (data: Partial<UserProfile>, planId: 'free' | 'monthly' | 'yearly') => void;
+  registerUser: (data: Partial<UserProfile>, planId: 'free' | 'monthly' | 'yearly', password?: string) => void;
   adminAuthenticated: boolean;
   setAdminAuthenticated: (auth: boolean) => void;
 
@@ -300,6 +307,91 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   });
 
+  // Students Directory for Admin Tracking & Session Persistence
+  const [studentsList, setStudentsList] = useState<UserProfile[]>(() => {
+    try {
+      const saved = localStorage.getItem('samwedna_students');
+      return saved ? JSON.parse(saved) : INITIAL_STUDENTS;
+    } catch {
+      return INITIAL_STUDENTS;
+    }
+  });
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('samwedna_students', JSON.stringify(studentsList));
+    } catch (e) {
+      console.error(e);
+    }
+  }, [studentsList]);
+
+  const isRegisteredStudent = (email: string): boolean => {
+    if (!email) return false;
+    const clean = email.trim().toLowerCase();
+    if (isAuthorizedAdmin(clean)) return true;
+    return studentsList.some(s => s.email.toLowerCase() === clean);
+  };
+
+  // Dedicated credentials verification to prevent unverified automatic logins
+  const verifyStudentCredentials = (email: string, pass: string): { valid: boolean; reason?: 'not_found' | 'wrong_password' | 'admin' } => {
+    if (!email) return { valid: false, reason: 'not_found' };
+    const cleanEmail = email.trim().toLowerCase();
+
+    // Check if authorized admin
+    if (isAuthorizedAdmin(cleanEmail)) {
+      if (pass.length < 6) return { valid: false, reason: 'wrong_password' };
+      return { valid: true, reason: 'admin' };
+    }
+
+    // Retrieve locally registered passwords
+    let registeredAccounts: Record<string, string> = {
+      'shukla.mohit52@gmail.com': 'samwedna2026',
+      'ananya.ias2026@gmail.com': 'upsc2026',
+      'rahul.ssc2026@gmail.com': 'ssccgl2026',
+      'priya.patel.upsc@gmail.com': 'iasaspirant'
+    };
+
+    try {
+      const stored = localStorage.getItem('samwedna_student_accounts');
+      if (stored) {
+        registeredAccounts = { ...registeredAccounts, ...JSON.parse(stored) };
+      }
+    } catch (e) {
+      console.error(e);
+    }
+
+    const studentRecord = studentsList.find(s => s.email.toLowerCase() === cleanEmail);
+    const hasRegisteredPassword = Boolean(registeredAccounts[cleanEmail]);
+
+    // If neither accounts store nor students list has this email, it does NOT exist!
+    if (!hasRegisteredPassword && !studentRecord) {
+      return { valid: false, reason: 'not_found' };
+    }
+
+    // If password is registered, check strict match
+    if (hasRegisteredPassword) {
+      if (registeredAccounts[cleanEmail] !== pass) {
+        return { valid: false, reason: 'wrong_password' };
+      }
+      return { valid: true };
+    }
+
+    // If in initial student list, accept minimum 6 chars
+    if (pass.length < 6) {
+      return { valid: false, reason: 'wrong_password' };
+    }
+
+    return { valid: true };
+  };
+
+  const updateStudentDetails = (studentId: string, data: Partial<UserProfile>) => {
+    setStudentsList(prev => prev.map(s => s.id === studentId ? { ...s, ...data } : s));
+    if (user && user.id === studentId) {
+      setUser(prev => prev ? { ...prev, ...data } : null);
+    }
+    showToast('Student record updated successfully', 'success');
+  };
+
   const [selectedBook, setSelectedBook] = useState<Book | null>(null);
   const [activeTestExam, setActiveTestExam] = useState<TestSeriesExam | null>(null);
   const [readingPdf, setReadingPdf] = useState<{ title: string; url: string; pages: number } | null>(null);
@@ -386,6 +478,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     if (user) {
       const updatedUserOrders = [created, ...(user.orders || [])];
       setUser({ ...user, orders: updatedUserOrders });
+      setStudentsList(prev => prev.map(s => s.email.toLowerCase() === user.email.toLowerCase() ? {
+        ...s,
+        orders: [created, ...(s.orders || [])]
+      } : s));
     }
     showToast(`Order #${order.orderId} placed successfully via Razorpay!`, 'success');
     return created;
@@ -398,6 +494,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       shippingStatus: status,
       ...(trackingId ? { trackingId } : {})
     } : o));
+    setStudentsList(prev => prev.map(s => ({
+      ...s,
+      orders: s.orders?.map(o => o.orderId === orderId ? { ...o, shippingStatus: status, ...(trackingId ? { trackingId } : {}) } : o)
+    })));
     showToast(`Order status updated to "${status}"`, 'info');
   };
 
@@ -415,6 +515,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         ...user,
         testScores: [score, ...(user.testScores || [])]
       });
+      setStudentsList(prev => prev.map(s => s.email.toLowerCase() === user.email.toLowerCase() ? {
+        ...s,
+        testScores: [score, ...(s.testScores || [])]
+      } : s));
     }
     showToast(`Test submitted! You scored ${score.scoreObtained}/${score.totalMarks} (AIR Rank: #${score.rank})`, 'success');
   };
@@ -445,12 +549,26 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     showToast(exists ? 'PDF removed from bookmarks' : 'PDF saved to your Student Library!', 'success');
   };
 
-  // Admin creators
+  // Admin creators & managers
   const addCurrentAffair = (article: CurrentAffairArticle) => {
     const updated = [article, ...currentAffairs];
     setCurrentAffairs(updated);
     localStorage.setItem('samwedna_ca', JSON.stringify(updated));
     showToast('Daily Current Affairs article published successfully!', 'success');
+  };
+
+  const updateCurrentAffair = (article: CurrentAffairArticle) => {
+    const updated = currentAffairs.map(a => a.id === article.id ? article : a);
+    setCurrentAffairs(updated);
+    localStorage.setItem('samwedna_ca', JSON.stringify(updated));
+    showToast('Current affairs article and topic banner updated successfully!', 'success');
+  };
+
+  const deleteCurrentAffair = (id: string) => {
+    const updated = currentAffairs.filter(a => a.id !== id);
+    setCurrentAffairs(updated);
+    localStorage.setItem('samwedna_ca', JSON.stringify(updated));
+    showToast('Current affairs article deleted successfully', 'info');
   };
 
   const addFreePdf = (pdf: FreePdfResource) => {
@@ -553,15 +671,25 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       }
     }
 
-    const loggedInUser: UserProfile = {
+    // Check if student exists in persistent students directory
+    const existingStudent = studentsList.find(s => s.email.toLowerCase() === email.trim().toLowerCase());
+    const loggedInUser: UserProfile = existingStudent ? {
+      ...existingStudent,
+      name: name || existingStudent.name || resolvedName,
+      phone: phone || existingStudent.phone || '+91 97929 03247',
+      authProvider: provider,
+      avatar: avatar || existingStudent.avatar || undefined,
+      isAdmin: userIsAdmin
+    } : {
       ...INITIAL_USER,
+      id: `std_${Date.now()}`,
       email: email.trim(),
       name: resolvedName,
       phone: phone || '+91 97929 03247',
       authProvider: provider,
       avatar: avatar || undefined,
-      rollNumber: INITIAL_USER.rollNumber || defaultRoll,
-      targetExam: targetExam || INITIAL_USER.targetExam || 'SSC CGL & Railway NTPC',
+      rollNumber: defaultRoll,
+      targetExam: targetExam || 'SSC CGL & Railway NTPC',
       isAdmin: userIsAdmin
     };
 
@@ -599,22 +727,40 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     if (user) {
       const updated = { ...user, ...data };
       setUser(updated);
+      setStudentsList(prev => prev.map(s => s.id === user.id ? { ...s, ...data } : s));
       showToast('Profile updated successfully!', 'success');
     }
   };
 
-  const registerUser = (data: Partial<UserProfile>, planId: 'free' | 'monthly' | 'yearly') => {
+  const registerUser = (data: Partial<UserProfile>, planId: 'free' | 'monthly' | 'yearly', password?: string) => {
     const planNameMap = {
       free: 'Student Free Pass',
       monthly: 'Monthly Aspirant Pro',
       yearly: 'Yearly Elite Scholar'
     };
 
+    const userEmail = (data.email || 'student@samwedna.org').trim().toLowerCase();
+
+    // Persist registered credentials for login verification
+    if (password) {
+      try {
+        let accounts: Record<string, string> = {};
+        const stored = localStorage.getItem('samwedna_student_accounts');
+        if (stored) {
+          accounts = JSON.parse(stored);
+        }
+        accounts[userEmail] = password;
+        localStorage.setItem('samwedna_student_accounts', JSON.stringify(accounts));
+      } catch (e) {
+        console.error(e);
+      }
+    }
+
     const newUser: UserProfile = {
       id: `std_${Date.now()}`,
       rollNumber: `SAM-2026-${Math.floor(1000 + Math.random() * 9000)}`,
       name: data.name || 'New Aspirant',
-      email: data.email || 'student@samwedna.org',
+      email: userEmail,
       phone: data.phone || '+91 97929 03247',
       address: data.address || {
         street: 'Main Road',
@@ -635,10 +781,15 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       savedCurrentAffairs: ['ca-2026-10-14-01'],
       bookmarkedPdfs: ['pdf-01', 'pdf-02'],
       testScores: USER_TEST_SCORES_DATA.slice(0, 2),
-      orders: INITIAL_ORDERS
+      orders: INITIAL_ORDERS,
+      createdAt: new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })
     };
 
     setUser(newUser);
+    setStudentsList(prev => {
+      const filtered = prev.filter(s => s.email.toLowerCase() !== newUser.email.toLowerCase());
+      return [newUser, ...filtered];
+    });
     showToast(`Welcome to Samwedna! Your Student ID is ${newUser.rollNumber}`, 'success');
     setCurrentView('student-dashboard');
     setAccountTab('dashboard');
@@ -676,6 +827,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         // Current Affairs
         currentAffairs,
         addCurrentAffair,
+        updateCurrentAffair,
+        deleteCurrentAffair,
         bookmarkCurrentAffair,
 
         // PDFs & Study Material
@@ -713,8 +866,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         setReadingEbook,
         downloadBookToLibrary,
 
-        // Auth & Admin
+        // Auth & Admin & Students Directory
         isAdmin,
+        studentsList,
+        isRegisteredStudent,
+        verifyStudentCredentials,
+        updateStudentDetails,
         loginUser,
         logoutUser,
         registerUser,

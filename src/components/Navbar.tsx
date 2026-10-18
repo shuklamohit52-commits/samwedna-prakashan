@@ -87,13 +87,17 @@ export const Navbar: React.FC = () => {
           <div className="flex items-center gap-1 sm:gap-2">
             <button
               onClick={handleSwitchToBooksboon}
-              className={`flex items-center gap-1.5 px-3 py-1 rounded-lg font-bold transition-all text-xs cursor-pointer ${
+              className={`flex items-center gap-2 px-3 py-1 rounded-lg font-bold transition-all text-xs cursor-pointer ${
                 portalMode === 'booksboon'
                   ? 'bg-amber-500 text-slate-950 shadow-sm'
                   : 'text-slate-400 hover:text-white hover:bg-slate-800'
               }`}
             >
-              <Store className="w-3.5 h-3.5" />
+              <img 
+                src="https://cdn.jsdelivr.net/gh/luckymohittiwari52-oss/quiz-assets@main/images/bokbon.jpg" 
+                alt="BooksBoon" 
+                className="w-4 h-4 rounded-full object-cover shrink-0 border border-white/20"
+              />
               <span>BOOKSBOON.COM</span>
               <span className="hidden sm:inline text-[9px] bg-slate-950/20 px-1.5 py-0.2 rounded font-extrabold uppercase">
                 Hard Copies & Magazines
@@ -102,13 +106,17 @@ export const Navbar: React.FC = () => {
 
             <button
               onClick={handleSwitchToInstitute}
-              className={`flex items-center gap-1.5 px-3 py-1 rounded-lg font-bold transition-all text-xs cursor-pointer ${
+              className={`flex items-center gap-2 px-3 py-1 rounded-lg font-bold transition-all text-xs cursor-pointer ${
                 portalMode === 'institute'
                   ? 'bg-indigo-600 text-white shadow-sm'
                   : 'text-slate-400 hover:text-white hover:bg-slate-800'
               }`}
             >
-              <GraduationCap className="w-3.5 h-3.5" />
+              <img 
+                src="https://cdn.jsdelivr.net/gh/luckymohittiwari52-oss/quiz-assets@main/images/sjgj.jpg" 
+                alt="Samwedna Group" 
+                className="w-4 h-4 rounded-full object-cover shrink-0 border border-white/20"
+              />
               <span>SAMWEDNA GROUP OF INSTITUTES</span>
               <span className="hidden md:inline text-[9px] bg-white/20 px-1.5 py-0.2 rounded font-extrabold uppercase">
                 Exam Preparation
@@ -150,10 +158,14 @@ export const Navbar: React.FC = () => {
             {portalMode === 'booksboon' ? (
               <button 
                 onClick={() => handleNavClick('product')}
-                className="flex items-center gap-2.5 text-left group"
+                className="flex items-center gap-3 text-left group cursor-pointer"
               >
-                <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-amber-600 to-rose-600 flex items-center justify-center text-white shadow-md shadow-amber-200 group-hover:scale-105 transition-transform">
-                  <Store className="w-5 h-5 text-white" />
+                <div className="w-11 h-11 rounded-xl overflow-hidden bg-white border border-amber-300/80 shadow-md shadow-amber-500/10 flex items-center justify-center p-0.5 group-hover:scale-105 transition-transform shrink-0">
+                  <img 
+                    src="https://cdn.jsdelivr.net/gh/luckymohittiwari52-oss/quiz-assets@main/images/bokbon.jpg" 
+                    alt="BooksBoon Official Logo" 
+                    className="w-full h-full object-contain rounded-lg"
+                  />
                 </div>
                 <div>
                   <div className="flex items-center gap-1.5">
@@ -172,10 +184,14 @@ export const Navbar: React.FC = () => {
             ) : (
               <button 
                 onClick={() => handleNavClick('home')}
-                className="flex items-center gap-2.5 text-left group"
+                className="flex items-center gap-3 text-left group cursor-pointer"
               >
-                <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-indigo-700 to-cyan-600 flex items-center justify-center text-white shadow-md shadow-indigo-200 group-hover:scale-105 transition-transform">
-                  <GraduationCap className="w-5 h-5 text-white" />
+                <div className="w-11 h-11 rounded-xl overflow-hidden bg-white border border-indigo-300/80 shadow-md shadow-indigo-500/10 flex items-center justify-center p-0.5 group-hover:scale-105 transition-transform shrink-0">
+                  <img 
+                    src="https://cdn.jsdelivr.net/gh/luckymohittiwari52-oss/quiz-assets@main/images/sjgj.jpg" 
+                    alt="Samwedna Group of Institutes Official Logo" 
+                    className="w-full h-full object-contain rounded-lg"
+                  />
                 </div>
                 <div>
                   <span className="text-xl font-black tracking-tight text-slate-900 font-display block leading-tight">
@@ -474,22 +490,32 @@ export const Navbar: React.FC = () => {
                 handleSwitchToBooksboon();
                 setMobileMenuOpen(false);
               }}
-              className={`flex-1 py-2 text-xs font-bold rounded-lg text-center ${
+              className={`flex-1 py-2 text-xs font-bold rounded-lg flex items-center justify-center gap-1.5 ${
                 portalMode === 'booksboon' ? 'bg-amber-500 text-slate-950 shadow-xs' : 'text-slate-600'
               }`}
             >
-              BooksBoon.com
+              <img 
+                src="https://cdn.jsdelivr.net/gh/luckymohittiwari52-oss/quiz-assets@main/images/bokbon.jpg" 
+                alt="BooksBoon" 
+                className="w-4 h-4 rounded-full object-cover shrink-0"
+              />
+              <span>BooksBoon.com</span>
             </button>
             <button
               onClick={() => {
                 handleSwitchToInstitute();
                 setMobileMenuOpen(false);
               }}
-              className={`flex-1 py-2 text-xs font-bold rounded-lg text-center ${
+              className={`flex-1 py-2 text-xs font-bold rounded-lg flex items-center justify-center gap-1.5 ${
                 portalMode === 'institute' ? 'bg-indigo-600 text-white shadow-xs' : 'text-slate-600'
               }`}
             >
-              Samwedna Institute
+              <img 
+                src="https://cdn.jsdelivr.net/gh/luckymohittiwari52-oss/quiz-assets@main/images/sjgj.jpg" 
+                alt="Samwedna" 
+                className="w-4 h-4 rounded-full object-cover shrink-0"
+              />
+              <span>Samwedna Institute</span>
             </button>
           </div>
 

@@ -71,7 +71,8 @@ export const SignUpView: React.FC = () => {
           landmark
         }
       },
-      selectedPlanId
+      selectedPlanId,
+      password
     );
   };
 
@@ -398,10 +399,19 @@ export const SignUpView: React.FC = () => {
                       </div>
 
                       <div>
-                        <span className="text-2xl font-extrabold text-slate-900 font-display">
-                          {plan.price === 0 ? '₹0' : `₹${plan.price}`}
+                        <div className="flex items-baseline gap-2">
+                          <span className="text-2xl font-extrabold text-emerald-800 font-display">
+                            ₹0
+                          </span>
+                          {plan.price > 0 && (
+                            <span className="text-sm line-through text-slate-400 font-bold">
+                              ₹{plan.price}
+                            </span>
+                          )}
+                        </div>
+                        <span className="text-[11px] text-emerald-700 font-bold block">
+                          {plan.price > 0 ? '100% Free Scholarship (₹0 Fees)' : plan.billingPeriod}
                         </span>
-                        <span className="text-[11px] text-slate-500 block">{plan.billingPeriod}</span>
                       </div>
 
                       <p className="text-[11px] text-slate-600">{plan.description}</p>

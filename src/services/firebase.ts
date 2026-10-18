@@ -274,14 +274,14 @@ export const persistOrderToFirestore = async (order: HardCopyOrder) => {
     const orderData = {
       orderId: order.orderId,
       userId: auth.currentUser?.uid || 'guest_checkout',
-      customerName: order.customerName,
-      customerEmail: order.customerEmail,
-      customerPhone: order.customerPhone,
+      customerName: order.studentName,
+      customerEmail: order.studentEmail,
+      customerPhone: order.phone,
       itemsCount: order.items.length,
       totalAmount: order.totalAmount,
       paymentStatus: order.paymentStatus,
       shippingStatus: order.shippingStatus,
-      createdAt: order.orderedAt || new Date().toISOString()
+      createdAt: order.createdAt || new Date().toISOString()
     };
     await setDoc(orderRef, orderData, { merge: true });
   } catch (error) {
@@ -302,11 +302,11 @@ export const persistTestScoreToFirestore = async (score: UserTestScore) => {
       testId: score.testId,
       testTitle: score.testTitle,
       category: score.category,
-      score: score.score,
-      totalQuestions: score.totalQuestions,
-      accuracy: score.accuracy,
+      score: score.scoreObtained,
+      totalMarks: score.totalMarks,
+      accuracy: score.accuracyPercentage,
       percentile: score.percentile,
-      completedAt: score.date || new Date().toISOString()
+      completedAt: score.dateAttempted || new Date().toISOString()
     };
     await setDoc(attemptRef, attemptData, { merge: true });
   } catch (error) {

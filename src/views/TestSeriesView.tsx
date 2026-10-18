@@ -380,19 +380,28 @@ export const TestSeriesView: React.FC = () => {
                     )}
                   </div>
 
-                  {/* Actions */}
-                  <div className="pt-2 flex items-center justify-between gap-3">
-                    <span className="text-xs text-slate-500 flex items-center gap-1">
-                      <Users className="w-3.5 h-3.5 text-slate-400" />
-                      <span>{test.enrolledStudents.toLocaleString()} Enrolled</span>
-                    </span>
+                  {/* Pricing & Actions */}
+                  <div className="pt-2 flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-t border-slate-100">
+                    <div>
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-base font-extrabold text-emerald-700 font-mono">₹0 FREE</span>
+                        <span className="text-xs line-through text-slate-400 font-semibold">₹499</span>
+                        <span className="text-[10px] bg-emerald-100 text-emerald-800 font-bold px-1.5 py-0.2 rounded">
+                          100% Scholarship
+                        </span>
+                      </div>
+                      <span className="text-[10px] text-slate-500 flex items-center gap-1 mt-0.5">
+                        <Users className="w-3 h-3 text-slate-400" />
+                        <span>{test.enrolledStudents.toLocaleString()} Enrolled</span>
+                      </span>
+                    </div>
 
                     <button
                       onClick={() => handleStartTest(test)}
-                      className="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs rounded-xl shadow-md transition-all flex items-center gap-1.5 cursor-pointer"
+                      className="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl shadow-md hover:shadow-lg transition-all flex items-center justify-center gap-1.5 cursor-pointer"
                     >
                       <Play className="w-3.5 h-3.5 fill-current" />
-                      <span>Start CBT Test</span>
+                      <span>Start CBT Test (₹0)</span>
                     </button>
                   </div>
                 </div>

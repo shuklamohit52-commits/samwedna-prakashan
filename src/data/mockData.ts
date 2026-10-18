@@ -1259,6 +1259,8 @@ export const DAILY_CURRENT_AFFAIRS: CurrentAffairArticle[] = [
     category: 'Science & Technology',
     tags: ['MoES', 'Matsya 6000', 'Deep Ocean Mission', 'UPSC Prelims'],
     readTime: '4 min read',
+    imageUrl: 'https://images.unsplash.com/photo-1544551763-46a013bb70d5?auto=format&fit=crop&w=1200&q=80',
+    bannerImage: 'https://images.unsplash.com/photo-1544551763-46a013bb70d5?auto=format&fit=crop&w=1200&q=80',
     summary: 'Ministry of Earth Sciences initiated final harbor and shallow water qualification trials for the indigenous human submersible capable of diving to 6,000 meters depth.',
     hindiSummary: 'पृथ्वी विज्ञान मंत्रालय ने 6,000 मीटर की गहराई तक गोता लगाने में सक्षम स्वदेशी मानवयुक्त पनडुब्बी के अंतिम बंदरगाह और उथले पानी के परीक्षण शुरू किए।',
     keyPoints: [
@@ -1291,6 +1293,8 @@ This critical mission aligns with India's Blue Economy policy, focusing on susta
     category: 'Economy & Banking',
     tags: ['RBI', 'Banking Awareness', 'ULI', 'Financial Inclusion'],
     readTime: '5 min read',
+    imageUrl: 'https://images.unsplash.com/photo-1559526324-4b87b5e36e44?auto=format&fit=crop&w=1200&q=80',
+    bannerImage: 'https://images.unsplash.com/photo-1559526324-4b87b5e36e44?auto=format&fit=crop&w=1200&q=80',
     summary: 'The Reserve Bank of India formalized rules for nation-wide deployment of ULI, drastically cutting loan sanction times for MSME and agricultural credit.',
     hindiSummary: 'भारतीय रिजर्व बैंक ने एमएसएमई और कृषि ऋण की स्वीकृति समय सीमा को न्यूनतम करने के लिए राष्ट्रव्यापी यूएलआई नियमों को अधिसूचित किया।',
     keyPoints: [
@@ -1323,6 +1327,8 @@ By eliminating manual paperwork, ULI bridges the massive credit gap faced by sma
     category: 'Polity & Constitution',
     tags: ['Supreme Court', 'Article 341', 'Article 16(4)', 'Polity'],
     readTime: '6 min read',
+    imageUrl: 'https://images.unsplash.com/photo-1589829545856-d10d557cf95f?auto=format&fit=crop&w=1200&q=80',
+    bannerImage: 'https://images.unsplash.com/photo-1589829545856-d10d557cf95f?auto=format&fit=crop&w=1200&q=80',
     summary: 'The Constitution Bench held that States have legislative competence to create sub-quotas within Scheduled Castes to provide affirmative action to the most marginalized sub-groups.',
     hindiSummary: 'संविधान पीठ ने माना कि राज्यों के पास सबसे वंचित उप-समूहों को सकारात्मक सहायता प्रदान करने के लिए अनुसूचित जातियों के भीतर उप-कोटा बनाने का विधायी अधिकार है।',
     keyPoints: [
@@ -1341,6 +1347,271 @@ The Court emphasized the doctrine of substantive equality enshrined in Article 1
       explanation: 'Article 341 empowers the President of India to specify the castes, races, or tribes to be deemed Scheduled Castes with respect to each State or UT.'
     },
     pdfUrl: '/samples/daily_ca_12_oct_2026.pdf'
+  }
+];
+
+export const INITIAL_ORDERS: HardCopyOrder[] = [
+  {
+    orderId: 'BB-ORD-98214',
+    trackingId: 'IP-EXP-2026-7841IN',
+    createdAt: '12 Oct 2026, 03:45 PM',
+    studentEmail: 'shukla.mohit52@gmail.com',
+    studentName: 'Mohit Shukla',
+    phone: '+91 97737 40485',
+    address: {
+      street: 'Ward No 24, Near Nehru Park, Chawani',
+      city: 'Neem Ka Thana',
+      state: 'Rajasthan',
+      pinCode: '332713',
+      landmark: 'Opposite State Bank Branch'
+    },
+    items: [
+      {
+        bookId: 'hindi-sahitya-itihas-rajneesh',
+        title: 'हिन्दी साहित्य का इतिहास (वस्तुनिष्ठ संकलन - द्वितीय संस्करण)',
+        format: 'Hard Copy Paperback',
+        quantity: 1,
+        price: 395,
+        coverImage: 'https://cdn.jsdelivr.net/gh/luckymohittiwari52-oss/quiz-assets@main/images/%E0%A4%B9%E0%A4%BF%E0%A4%82%E0%A4%A6%E0%A5%80%20%E0%A4%B8%E0%A4%BE%E0%A4%B9%E0%A4%BF%E0%A4%A4%E0%A5%8D%E0%A4%AF%20%E0%A4%95%E0%A4%BE%20%E0%A4%87%E0%A4%A4%E0%A4%BF%E0%A4%B9%E0%A4%BE%E0%A4%B8%20(%E0%A4%B5%E0%A4%B8%E0%A5%8D%E0%A4%A4%E0%A5%81%E0%A4%A8%E0%A4%BF%E0%A4%B7%E0%A5%8D%E0%A4%A0%20%E0%A4%B8%E0%A4%82%E0%A4%95%E0%A4%B2%E0%A4%A8)%2C%20%E0%A4%A6%E0%A5%8D%E0%A4%B5%E0%A4%BF%E0%A4%A4%E0%A5%80%E0%A4%AF%20%E0%A4%B8%E0%A4%82%E0%A4%B8%E0%A5%8D%E0%A4%95%E0%A4%B0%E0%A4%A3%20%E2%80%94%20%E2%82%B9395.jpg'
+      },
+      {
+        bookId: 'antarman-jagdish-narayan',
+        title: 'अंतर्मन (जीविका पथ से सामाजिक सरोकार तक)',
+        format: 'Hard Copy Paperback',
+        quantity: 1,
+        price: 350,
+        coverImage: 'https://cdn.jsdelivr.net/gh/luckymohittiwari52-oss/quiz-assets@main/images/%E0%A4%85%E0%A4%82%E0%A4%A4%E0%A4%B0%E0%A5%8D%E0%A4%AE%E0%A4%A8%20%E0%A4%9c%E0%A5%80%E0%A4%B5%E0%A4%BF%E0%A4%95%E0%A4%BE%20%E0%A4%AA%E0%A4%A5%20%E0%A4%B8%E0%A5%87%20%E0%A4%B8%E0%A4%BE%E0%A4%AE%E0%A4%BE%E0%A4%9c%E0%A4%BF%E0%A4%95%20%E0%A4%B8%E0%A4%B0%E0%A5%8B%E0%A4%95%E0%A4%BE%E0%A4%B0%20%E0%A4%A4%E0%A4%95%20%E2%80%94%20%E2%82%B9350.jpg'
+      }
+    ],
+    subtotal: 745,
+    shippingFee: 0,
+    totalAmount: 745,
+    paymentMethod: 'Razorpay',
+    paymentId: 'pay_rzp_984129841',
+    paymentStatus: 'Paid',
+    shippingStatus: 'Dispatched via Courier',
+    courierPartner: 'India Post Speed Post',
+    estimatedDelivery: '16 October 2026'
+  }
+];
+
+export const INITIAL_STUDENTS: UserProfile[] = [
+  {
+    id: 'std_101',
+    rollNumber: 'SAM-2026-1042',
+    name: 'Mohit Shukla',
+    email: 'shukla.mohit52@gmail.com',
+    phone: '+91 97737 40485',
+    address: {
+      street: 'Ward No 24, Near Nehru Park, Chawani',
+      city: 'Neem Ka Thana',
+      state: 'Rajasthan',
+      pinCode: '332713',
+      landmark: 'Opposite State Bank Branch'
+    },
+    targetExam: 'SSC CGL & Railway NTPC',
+    subscription: {
+      planId: 'yearly',
+      planName: 'Yearly Elite Scholar',
+      startDate: '2026-01-15',
+      expiryDate: '2027-01-14',
+      status: 'Active'
+    },
+    library: [],
+    testScores: USER_TEST_SCORES_DATA,
+    orders: INITIAL_ORDERS,
+    createdAt: '15 Jan 2026'
+  },
+  {
+    id: 'std_102',
+    rollNumber: 'SAM-2026-2189',
+    name: 'Ananya Sharma',
+    email: 'ananya.ias2026@gmail.com',
+    phone: '+91 98112 34567',
+    address: {
+      street: 'Flat 402, Prerna Apartments, Sector 14',
+      city: 'Lucknow',
+      state: 'Uttar Pradesh',
+      pinCode: '226012',
+      landmark: 'Near City Hospital'
+    },
+    targetExam: 'UPSC Civil Services (IAS / IPS)',
+    subscription: {
+      planId: 'yearly',
+      planName: 'Yearly Elite Scholar (Scholarship - ₹0)',
+      startDate: '2026-02-10',
+      expiryDate: '2027-02-09',
+      status: 'Active'
+    },
+    library: [],
+    testScores: [
+      {
+        id: 'score-as-01',
+        testId: 'ts-upsc-csat-2026',
+        testTitle: 'UPSC Prelims GS Paper 1 Mock Simulation',
+        category: 'UPSC & Civil Services',
+        dateAttempted: '12 Oct 2026',
+        scoreObtained: 142,
+        totalMarks: 200,
+        accuracyPercentage: 86.5,
+        percentile: 98.4,
+        rank: 18,
+        totalCandidates: 14200,
+        timeSpentMinutes: 110,
+        status: 'Completed'
+      }
+    ],
+    orders: [
+      {
+        orderId: 'BB-ORD-912440',
+        trackingId: 'IP-EXP-2026-4421IN',
+        createdAt: '08 Oct 2026, 14:20',
+        studentEmail: 'ananya.ias2026@gmail.com',
+        studentName: 'Ananya Sharma',
+        phone: '+91 98112 34567',
+        address: {
+          street: 'Flat 402, Prerna Apartments, Sector 14',
+          city: 'Lucknow',
+          state: 'Uttar Pradesh',
+          pinCode: '226012'
+        },
+        items: [
+          {
+            bookId: 'antarman-jagdish-narayan',
+            title: 'अंतर्मन (जीविका पथ से सामाजिक सरोकार तक)',
+            format: 'Paperback',
+            quantity: 1,
+            price: 350
+          }
+        ],
+        subtotal: 350,
+        shippingFee: 50,
+        totalAmount: 400,
+        paymentMethod: 'Razorpay',
+        paymentId: 'pay_rzp_test_9921',
+        paymentStatus: 'Paid',
+        shippingStatus: 'Delivered',
+        courierPartner: 'India Post Speed Post',
+        estimatedDelivery: '12 Oct 2026'
+      }
+    ],
+    createdAt: '10 Feb 2026'
+  },
+  {
+    id: 'std_103',
+    rollNumber: 'SAM-2026-3401',
+    name: 'Rahul Verma',
+    email: 'rahul.railway@gmail.com',
+    phone: '+91 94520 88910',
+    address: {
+      street: 'H.No 12, Railway Colony, Rustampur',
+      city: 'Gorakhpur',
+      state: 'Uttar Pradesh',
+      pinCode: '273016',
+      landmark: 'Near Azad Chauk'
+    },
+    targetExam: 'Railway RRB NTPC & Group D',
+    subscription: {
+      planId: 'free',
+      planName: 'Student Free Pass (₹0 Fees)',
+      startDate: '2026-03-01',
+      expiryDate: '2099-12-31',
+      status: 'Active'
+    },
+    library: [],
+    testScores: [
+      {
+        id: 'score-rv-01',
+        testId: 'ts-rrb-ntpc-2026',
+        testTitle: 'RRB NTPC CBT Stage-1 All India Test',
+        category: 'All Railway Exam',
+        dateAttempted: '11 Oct 2026',
+        scoreObtained: 84,
+        totalMarks: 100,
+        accuracyPercentage: 91.3,
+        percentile: 96.8,
+        rank: 92,
+        totalCandidates: 28900,
+        timeSpentMinutes: 82,
+        status: 'Completed'
+      }
+    ],
+    orders: [],
+    createdAt: '01 Mar 2026'
+  },
+  {
+    id: 'std_104',
+    rollNumber: 'SAM-2026-4872',
+    name: 'Priya Singh',
+    email: 'priya.teaching.net@gmail.com',
+    phone: '+91 91200 44321',
+    address: {
+      street: 'Shastri Nagar, Road No 4',
+      city: 'Patna',
+      state: 'Bihar',
+      pinCode: '800023'
+    },
+    targetExam: 'Teaching & UGC NET (Hindi Sahitya)',
+    subscription: {
+      planId: 'yearly',
+      planName: 'Yearly Elite Scholar (Scholarship - ₹0)',
+      startDate: '2026-04-12',
+      expiryDate: '2027-04-11',
+      status: 'Active'
+    },
+    library: [],
+    testScores: [
+      {
+        id: 'score-ps-01',
+        testId: 'ts-ugc-net-hindi-2026',
+        testTitle: 'UGC NET हिन्दी साहित्य 2500+ MCQs टेस्ट',
+        category: 'Teaching & UGC NET',
+        dateAttempted: '14 Oct 2026',
+        scoreObtained: 248,
+        totalMarks: 300,
+        accuracyPercentage: 88.0,
+        percentile: 99.1,
+        rank: 12,
+        totalCandidates: 8400,
+        timeSpentMinutes: 140,
+        status: 'Completed'
+      }
+    ],
+    orders: [
+      {
+        orderId: 'BB-ORD-771239',
+        trackingId: 'IP-EXP-2026-8812IN',
+        createdAt: '11 Oct 2026, 09:40',
+        studentEmail: 'priya.teaching.net@gmail.com',
+        studentName: 'Priya Singh',
+        phone: '+91 91200 44321',
+        address: {
+          street: 'Shastri Nagar, Road No 4',
+          city: 'Patna',
+          state: 'Bihar',
+          pinCode: '800023'
+        },
+        items: [
+          {
+            bookId: 'hindi-sahitya-itihas-rajneesh',
+            title: 'हिन्दी साहित्य का इतिहास (वस्तुनिष्ठ संकलन - 2500+ MCQs)',
+            format: 'Paperback',
+            quantity: 1,
+            price: 395
+          }
+        ],
+        subtotal: 395,
+        shippingFee: 50,
+        totalAmount: 445,
+        paymentMethod: 'Razorpay',
+        paymentId: 'pay_rzp_test_priya_01',
+        paymentStatus: 'Paid',
+        shippingStatus: 'In Transit',
+        courierPartner: 'India Post Speed Post',
+        estimatedDelivery: '16 Oct 2026'
+      }
+    ],
+    createdAt: '12 Apr 2026'
   }
 ];
 
@@ -1476,49 +1747,5 @@ export const STUDY_MATERIALS_DATA: StudyMaterialItem[] = [
   }
 ];
 
-export const INITIAL_ORDERS: HardCopyOrder[] = [
-  {
-    orderId: 'BB-ORD-98214',
-    trackingId: 'IP-EXP-2026-7841IN',
-    createdAt: '12 Oct 2026, 03:45 PM',
-    studentEmail: 'shukla.mohit52@gmail.com',
-    studentName: 'Mohit Shukla',
-    phone: '+91 97737 40485',
-    address: {
-      street: 'Ward No 24, Near Nehru Park, Chawani',
-      city: 'Neem Ka Thana',
-      state: 'Rajasthan',
-      pinCode: '332713',
-      landmark: 'Opposite State Bank Branch'
-    },
-    items: [
-      {
-        bookId: 'hindi-sahitya-itihas-rajneesh',
-        title: 'हिन्दी साहित्य का इतिहास (वस्तुनिष्ठ संकलन - द्वितीय संस्करण)',
-        format: 'Hard Copy Paperback',
-        quantity: 1,
-        price: 395,
-        coverImage: 'https://cdn.jsdelivr.net/gh/luckymohittiwari52-oss/quiz-assets@main/images/%E0%A4%B9%E0%A4%BF%E0%A4%82%E0%A4%A6%E0%A5%80%20%E0%A4%B8%E0%A4%BE%E0%A4%B9%E0%A4%BF%E0%A4%A4%E0%A5%8D%E0%A4%AF%20%E0%A4%95%E0%A4%BE%20%E0%A4%87%E0%A4%A4%E0%A4%BF%E0%A4%B9%E0%A4%BE%E0%A4%B8%20(%E0%A4%B5%E0%A4%B8%E0%A5%8D%E0%A4%A4%E0%A5%81%E0%A4%A8%E0%A4%BF%E0%A4%B7%E0%A5%8D%E0%A4%A0%20%E0%A4%B8%E0%A4%82%E0%A4%95%E0%A4%B2%E0%A4%A8)%2C%20%E0%A4%A6%E0%A5%8D%E0%A4%B5%E0%A4%BF%E0%A4%A4%E0%A5%80%E0%A4%AF%20%E0%A4%B8%E0%A4%82%E0%A4%B8%E0%A5%8D%E0%A4%95%E0%A4%B0%E0%A4%A3%20%E2%80%94%20%E2%82%B9395.jpg'
-      },
-      {
-        bookId: 'antarman-jagdish-narayan',
-        title: 'अंतर्मन (जीविका पथ से सामाजिक सरोकार तक)',
-        format: 'Hard Copy Paperback',
-        quantity: 1,
-        price: 350,
-        coverImage: 'https://cdn.jsdelivr.net/gh/luckymohittiwari52-oss/quiz-assets@main/images/%E0%A4%85%E0%A4%82%E0%A4%A4%E0%A4%B0%E0%A5%8D%E0%A4%AE%E0%A4%A8%20%E0%A4%9c%E0%A5%80%E0%A4%B5%E0%A4%BF%E0%A4%95%E0%A4%BE%20%E0%A4%AA%E0%A4%A5%20%E0%A4%B8%E0%A5%87%20%E0%A4%B8%E0%A4%BE%E0%A4%AE%E0%A4%BE%E0%A4%9c%E0%A4%BF%E0%A4%95%20%E0%A4%B8%E0%A4%B0%E0%A5%8B%E0%A4%95%E0%A4%BE%E0%A4%B0%20%E0%A4%A4%E0%A4%95%20%E2%80%94%20%E2%82%B9350.jpg'
-      }
-    ],
-    subtotal: 745,
-    shippingFee: 0,
-    totalAmount: 745,
-    paymentMethod: 'Razorpay',
-    paymentId: 'pay_rzp_984129841',
-    paymentStatus: 'Paid',
-    shippingStatus: 'Dispatched via Courier',
-    courierPartner: 'India Post Speed Post',
-    estimatedDelivery: '16 October 2026'
-  }
-];
 
 

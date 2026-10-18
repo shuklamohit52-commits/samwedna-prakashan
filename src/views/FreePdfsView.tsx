@@ -141,9 +141,15 @@ export const FreePdfsView: React.FC = () => {
                     {pdf.description}
                   </p>
 
-                  <div className="flex items-center justify-between text-[11px] text-slate-500 pt-2 border-t border-slate-100">
-                    <span>{pdf.pages} Pages • {pdf.fileSize}</span>
-                    <span className="text-emerald-700 font-semibold">{pdf.downloadsCount.toLocaleString()} Downloads</span>
+                  <div className="flex items-center justify-between text-[11px] pt-2 border-t border-slate-100">
+                    <div className="flex items-center gap-1.5">
+                      <span className="font-extrabold text-emerald-700">₹0 FREE</span>
+                      <span className="line-through text-slate-400 font-semibold text-[10px]">₹199</span>
+                      <span className="text-[9px] bg-emerald-100 text-emerald-800 font-bold px-1.5 py-0.2 rounded">
+                        0 Fees Offer
+                      </span>
+                    </div>
+                    <span className="text-slate-400 text-[10px]">{pdf.pages} Pages • {pdf.fileSize}</span>
                   </div>
                 </div>
 

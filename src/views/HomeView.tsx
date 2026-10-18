@@ -326,12 +326,21 @@ export const HomeView: React.FC = () => {
           <div className="bg-gradient-to-br from-amber-50/50 via-white to-orange-50/30 rounded-3xl border border-amber-200/80 p-8 sm:p-10 shadow-sm space-y-8 animate-fadeIn">
             
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-6 border-b border-amber-200/60">
-              <div className="space-y-1">
-                <div className="flex items-center gap-2">
-                  <span className="px-2.5 py-0.5 rounded-full bg-amber-500 text-slate-950 text-xs font-black">
-                    booksboon.com
-                  </span>
-                  <span className="text-xs font-bold text-amber-800">Hard Copies & Magazines E-Commerce</span>
+              <div className="space-y-2">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl overflow-hidden bg-white border border-amber-300 p-0.5 shadow-xs shrink-0">
+                    <img 
+                      src="https://cdn.jsdelivr.net/gh/luckymohittiwari52-oss/quiz-assets@main/images/bokbon.jpg" 
+                      alt="BooksBoon" 
+                      className="w-full h-full object-contain"
+                    />
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="px-2.5 py-0.5 rounded-full bg-amber-500 text-slate-950 text-xs font-black">
+                      booksboon.com
+                    </span>
+                    <span className="text-xs font-bold text-amber-800">Hard Copies & Magazines E-Commerce</span>
+                  </div>
                 </div>
                 <h3 className="text-2xl font-black text-slate-900 font-display">
                   Physical Hard Copy Books & Magazines
@@ -419,12 +428,21 @@ export const HomeView: React.FC = () => {
           <div className="bg-gradient-to-br from-indigo-50/50 via-white to-cyan-50/30 rounded-3xl border border-indigo-200/80 p-8 sm:p-10 shadow-sm space-y-8 animate-fadeIn">
             
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-6 border-b border-indigo-200/60">
-              <div className="space-y-1">
-                <div className="flex items-center gap-2">
-                  <span className="px-2.5 py-0.5 rounded-full bg-indigo-600 text-white text-xs font-black">
-                    samwedna.org
-                  </span>
-                  <span className="text-xs font-bold text-indigo-800">Complete Student Preparation Solution</span>
+              <div className="space-y-2">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl overflow-hidden bg-white border border-indigo-300 p-0.5 shadow-xs shrink-0">
+                    <img 
+                      src="https://cdn.jsdelivr.net/gh/luckymohittiwari52-oss/quiz-assets@main/images/sjgj.jpg" 
+                      alt="Samwedna Group of Institutes" 
+                      className="w-full h-full object-contain"
+                    />
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="px-2.5 py-0.5 rounded-full bg-indigo-600 text-white text-xs font-black">
+                      samwedna.org
+                    </span>
+                    <span className="text-xs font-bold text-indigo-800">Complete Student Preparation Solution</span>
+                  </div>
                 </div>
                 <h3 className="text-2xl font-black text-slate-900 font-display">
                   Daily Current Affairs, Test Series, Free PDFs & Video Lectures

@@ -167,6 +167,26 @@ export const DailyCurrentAffairsView: React.FC = () => {
                   </button>
                 </div>
 
+                {/* Topic Image Banner */}
+                {(article.imageUrl || article.bannerImage) && (
+                  <div className="relative w-full h-48 sm:h-60 rounded-2xl overflow-hidden bg-slate-900 group shadow-sm border border-slate-100">
+                    <img 
+                      src={article.imageUrl || article.bannerImage} 
+                      alt={article.title}
+                      className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" 
+                    />
+                    <div className="absolute inset-0 bg-gradient-to-t from-slate-950/80 via-slate-950/20 to-transparent" />
+                    <div className="absolute bottom-3 left-4 right-4 flex items-center justify-between text-white text-xs">
+                      <span className="font-bold bg-white/20 backdrop-blur-md px-3 py-1 rounded-lg border border-white/20 text-[11px]">
+                        Topic Digest: {article.category}
+                      </span>
+                      <span className="text-[11px] text-slate-200 font-medium">
+                        Samwedna Institute Editorial Analysis
+                      </span>
+                    </div>
+                  </div>
+                )}
+
                 {/* Title */}
                 <div>
                   <h2 className="text-xl sm:text-2xl font-extrabold text-slate-900 font-display leading-snug">

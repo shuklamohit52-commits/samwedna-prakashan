@@ -209,17 +209,24 @@ export const VideoLecturesView: React.FC = () => {
                 </p>
               </div>
 
-              <div className="pt-3 border-t border-slate-100 flex items-center justify-between text-xs">
+              <div className="pt-3 border-t border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs">
                 <div>
-                  <span className="text-slate-400 text-[11px]">Faculty: </span>
-                  <span className="font-semibold text-slate-800">{lecture.instructor}</span>
+                  <div className="flex items-center gap-1.5">
+                    <span className="font-extrabold text-emerald-700 text-xs font-mono">₹0 FREE</span>
+                    <span className="line-through text-slate-400 font-semibold text-[10px]">₹1,499</span>
+                    <span className="text-[9px] bg-emerald-100 text-emerald-800 font-bold px-1.5 py-0.2 rounded">
+                      0 Fees Offer
+                    </span>
+                  </div>
+                  <span className="text-slate-400 text-[10px] block">Faculty: <strong className="text-slate-700">{lecture.instructor}</strong></span>
                 </div>
 
                 <button
                   onClick={() => setActiveLecture(lecture)}
-                  className="px-3 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-bold rounded-lg transition-colors cursor-pointer"
+                  className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-lg transition-colors cursor-pointer text-xs flex items-center justify-center gap-1"
                 >
-                  Watch Lecture
+                  <Play className="w-3 h-3 fill-current" />
+                  <span>Watch Free</span>
                 </button>
               </div>
             </div>

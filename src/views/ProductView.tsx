@@ -137,17 +137,28 @@ export const ProductView: React.FC = () => {
             <span>/</span>
             <span className="text-slate-800 font-semibold">Hard Copies & Magazines Store</span>
           </div>
-          <div className="flex items-center gap-2">
-            <h1 className="text-3xl font-black text-slate-900 font-display">
-              BooksBoon Hard Copies & Magazines
-            </h1>
-            <span className="px-2.5 py-0.5 rounded-full bg-amber-100 text-amber-800 text-xs font-black">
-              booksboon.com
-            </span>
+          <div className="flex items-center gap-3">
+            <div className="w-12 h-12 rounded-xl overflow-hidden bg-white border border-amber-300 p-0.5 shadow-sm shrink-0">
+              <img 
+                src="https://cdn.jsdelivr.net/gh/luckymohittiwari52-oss/quiz-assets@main/images/bokbon.jpg" 
+                alt="BooksBoon Official Logo" 
+                className="w-full h-full object-contain"
+              />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <h1 className="text-2xl sm:text-3xl font-black text-slate-900 font-display">
+                  BooksBoon Hard Copies & Magazines
+                </h1>
+                <span className="px-2.5 py-0.5 rounded-full bg-amber-100 text-amber-800 text-xs font-black">
+                  booksboon.com
+                </span>
+              </div>
+              <p className="text-xs text-slate-500 mt-0.5">
+                Official publisher store for physical hard copy books, magazines, and study guides with door-step courier delivery. Free shipping on orders over ₹499.
+              </p>
+            </div>
           </div>
-          <p className="text-xs text-slate-500 mt-1">
-            Official publisher store for physical hard copy books, magazines, and study guides with door-step courier delivery. Free shipping on orders over ₹499.
-          </p>
         </div>
 
         {/* Search bar inside product view */}

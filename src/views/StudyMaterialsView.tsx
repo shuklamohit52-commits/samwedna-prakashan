@@ -134,15 +134,24 @@ export const StudyMaterialsView: React.FC = () => {
               </div>
             </div>
 
-            <div className="flex items-center justify-between pt-4 border-t border-slate-100">
-              <span className="text-xs text-slate-500 font-medium">
-                {item.pages} Pages • {item.fileSize}
-              </span>
+            <div className="pt-3 border-t border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div>
+                <div className="flex items-center gap-1.5">
+                  <span className="text-sm font-black text-emerald-700 font-mono">₹0 FREE</span>
+                  <span className="text-xs line-through text-slate-400 font-bold">₹299</span>
+                  <span className="text-[10px] bg-emerald-100 text-emerald-800 font-extrabold px-1.5 py-0.5 rounded">
+                    0 Fees Launch Offer
+                  </span>
+                </div>
+                <span className="text-[10px] text-slate-400 block mt-0.5 font-medium">
+                  {item.pages} Pages • {item.fileSize} • Standard fee ₹299 applies later
+                </span>
+              </div>
 
               <div className="flex items-center gap-2">
                 <button
                   onClick={() => setReadingPdf({ title: item.title, url: item.downloadUrl, pages: item.pages })}
-                  className="px-4 py-2 rounded-xl bg-indigo-50 hover:bg-indigo-100 text-indigo-700 text-xs font-bold flex items-center gap-1.5 cursor-pointer"
+                  className="px-3.5 py-2 rounded-xl bg-indigo-50 hover:bg-indigo-100 text-indigo-700 text-xs font-bold flex items-center gap-1.5 cursor-pointer transition-colors"
                 >
                   <Eye className="w-3.5 h-3.5" />
                   <span>Preview</span>
@@ -150,10 +159,10 @@ export const StudyMaterialsView: React.FC = () => {
 
                 <button
                   onClick={() => handleDownload(item.title, item.downloadUrl)}
-                  className="px-4 py-2 rounded-xl bg-slate-900 hover:bg-indigo-700 text-white text-xs font-bold flex items-center gap-1.5 cursor-pointer shadow-xs"
+                  className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold flex items-center gap-1.5 cursor-pointer shadow-xs transition-colors"
                 >
                   <Download className="w-3.5 h-3.5" />
-                  <span>Download</span>
+                  <span>Download Free</span>
                 </button>
               </div>
             </div>

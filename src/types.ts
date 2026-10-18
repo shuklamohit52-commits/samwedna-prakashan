@@ -167,6 +167,7 @@ export interface UserProfile {
   testScores?: UserTestScore[];
   orders?: HardCopyOrder[];
   isAdmin?: boolean;
+  createdAt?: string;
 }
 
 export interface CurrentAffairArticle {
@@ -181,6 +182,8 @@ export interface CurrentAffairArticle {
   hindiSummary?: string;
   keyPoints: string[];
   fullContent: string;
+  imageUrl?: string;
+  bannerImage?: string;
   relatedMcq?: {
     question: string;
     options: string[];
