@@ -1,0 +1,71 @@
+{
+  "entities": {
+    "user": {
+      "title": "User",
+      "description": "User profile and student identity account in Samwedna & BooksBoon portal",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "maxLength": 128 },
+        "email": { "type": "string", "format": "email", "maxLength": 128 },
+        "displayName": { "type": "string", "maxLength": 100 },
+        "photoURL": { "type": "string", "maxLength": 500 },
+        "phone": { "type": "string", "maxLength": 25 },
+        "role": { "type": "string", "enum": ["admin", "student"], "maxLength": 20 },
+        "targetExam": { "type": "string", "maxLength": 100 },
+        "createdAt": { "type": "string", "maxLength": 64 },
+        "updatedAt": { "type": "string", "maxLength": 64 }
+      },
+      "required": ["uid", "email"]
+    },
+    "order": {
+      "title": "Order",
+      "description": "BooksBoon hard copy publications and magazines e-commerce orders",
+      "type": "object",
+      "properties": {
+        "orderId": { "type": "string", "maxLength": 64 },
+        "userId": { "type": "string", "maxLength": 128 },
+        "customerName": { "type": "string", "maxLength": 100 },
+        "customerEmail": { "type": "string", "format": "email", "maxLength": 128 },
+        "customerPhone": { "type": "string", "maxLength": 25 },
+        "itemsCount": { "type": "number" },
+        "totalAmount": { "type": "number" },
+        "paymentStatus": { "type": "string", "enum": ["Paid", "Pending", "Failed"], "maxLength": 20 },
+        "shippingStatus": { "type": "string", "enum": ["Ordered", "Dispatched", "In Transit", "Out for Delivery", "Delivered"], "maxLength": 30 },
+        "createdAt": { "type": "string", "maxLength": 64 }
+      },
+      "required": ["orderId", "userId", "customerEmail", "totalAmount", "paymentStatus"]
+    },
+    "testAttempt": {
+      "title": "TestAttempt",
+      "description": "Student mock exam results, marks, accuracy, and percentile records",
+      "type": "object",
+      "properties": {
+        "attemptId": { "type": "string", "maxLength": 64 },
+        "userId": { "type": "string", "maxLength": 128 },
+        "testId": { "type": "string", "maxLength": 64 },
+        "testTitle": { "type": "string", "maxLength": 150 },
+        "category": { "type": "string", "maxLength": 64 },
+        "score": { "type": "number" },
+        "totalQuestions": { "type": "number" },
+        "accuracy": { "type": "number" },
+        "percentile": { "type": "number" },
+        "completedAt": { "type": "string", "maxLength": 64 }
+      },
+      "required": ["attemptId", "userId", "testId", "score"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": { "$ref": "#/entities/user" },
+      "description": "Private user and student profile documents identified by Firebase Auth UID"
+    },
+    "/orders/{orderId}": {
+      "schema": { "$ref": "#/entities/order" },
+      "description": "BooksBoon hard copy publications orders with shipping and payment details"
+    },
+    "/testAttempts/{attemptId}": {
+      "schema": { "$ref": "#/entities/testAttempt" },
+      "description": "Mock test examination attempts and analytics scores"
+    }
+  }
+}
