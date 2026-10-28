@@ -35,7 +35,9 @@ export const TestSeriesView: React.FC = () => {
     setActiveTestExam, 
     setSelectedBook, 
     setCurrentView, 
-    showToast 
+    showToast,
+    appLanguage,
+    setAppLanguage
   } = useApp();
 
   const [activeTab, setActiveTab] = useState<'available' | 'leaderboard' | 'scores' | 'analytics'>('available');
@@ -302,106 +304,149 @@ export const TestSeriesView: React.FC = () => {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             {filteredTests.map((test) => {
               const matchedBook = BOOKS_DATA.find(b => b.id === test.associatedBookId);
+              const isHindi = appLanguage === 'HI';
+              const primaryTitle = isHindi && test.hindiTitle ? test.hindiTitle : test.title;
+              const secondaryTitle = isHindi && test.hindiTitle ? test.title : test.hindiTitle;
+
               return (
                 <div
                   key={test.id}
-                  className="bg-white rounded-2xl border border-slate-200 shadow-xs hover:shadow-md transition-all p-6 flex flex-col justify-between space-y-4 group"
+                  className="bg-white rounded-3xl border-2 border-slate-200/90 hover:border-indigo-500/80 shadow-md hover:shadow-xl transition-all p-6 sm:p-7 flex flex-col justify-between space-y-5 group relative overflow-hidden"
                 >
-                  <div className="space-y-3">
-                    <div className="flex items-center justify-between">
-                      <span className="text-[10px] font-bold text-indigo-700 bg-indigo-50 px-2.5 py-1 rounded uppercase tracking-wider">
+                  {/* Top Corner Ribbon / Badge */}
+                  <div className="absolute top-0 right-0">
+                    <span className="inline-block bg-gradient-to-r from-indigo-600 to-indigo-800 text-white text-[10px] font-black uppercase tracking-wider px-3.5 py-1 rounded-bl-xl shadow-xs">
+                      {test.language || 'BILINGUAL / द्विभाषी'}
+                    </span>
+                  </div>
+
+                  <div className="space-y-4">
+                    {/* Header Chips */}
+                    <div className="flex flex-wrap items-center gap-2 pr-28">
+                      <span className="text-[11px] font-black text-indigo-700 bg-indigo-50 border border-indigo-200 px-3 py-1 rounded-lg uppercase tracking-wider">
                         {test.category}
                       </span>
-                      <div className="flex items-center gap-2">
-                        {test.isFreeDemo && (
-                          <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded">
-                            FREE DEMO
-                          </span>
-                        )}
-                        <span className="text-[10px] font-semibold text-slate-500 bg-slate-100 px-2 py-0.5 rounded">
-                          {test.difficulty}
+                      <span className="text-[10px] font-bold text-slate-700 bg-slate-100 border border-slate-200 px-2.5 py-1 rounded-lg">
+                        {test.difficulty}
+                      </span>
+                      {test.isFreeDemo && (
+                        <span className="text-[10px] font-black text-emerald-800 bg-emerald-50 border border-emerald-200 px-2.5 py-1 rounded-lg flex items-center gap-1">
+                          <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                          <span>FREE PASS</span>
+                        </span>
+                      )}
+                    </div>
+
+                    {/* Titles */}
+                    <div className="space-y-1">
+                      <h3 className="text-lg font-black text-slate-900 font-display group-hover:text-indigo-600 transition-colors leading-snug">
+                        {primaryTitle}
+                      </h3>
+                      {secondaryTitle && (
+                        <p className="text-xs text-slate-600 font-medium leading-relaxed italic">
+                          {secondaryTitle}
+                        </p>
+                      )}
+                    </div>
+
+                    {/* NTA / TCS Pattern Authentic Metrics HUD */}
+                    <div className="grid grid-cols-4 gap-2 p-3 bg-slate-50/80 rounded-2xl border border-slate-200/80 text-center">
+                      <div className="border-r border-slate-200/60 pr-1">
+                        <span className="text-[10px] text-slate-500 uppercase font-bold block">Questions</span>
+                        <span className="text-sm font-black text-slate-900 font-mono mt-0.5 block">{test.totalQuestions} Qs</span>
+                      </div>
+                      <div className="border-r border-slate-200/60 pr-1">
+                        <span className="text-[10px] text-slate-500 uppercase font-bold block">Time</span>
+                        <span className="text-sm font-black text-slate-900 font-mono mt-0.5 block">{test.durationMinutes}m</span>
+                      </div>
+                      <div className="border-r border-slate-200/60 pr-1">
+                        <span className="text-[10px] text-slate-500 uppercase font-bold block">Max Marks</span>
+                        <span className="text-sm font-black text-indigo-700 font-mono mt-0.5 block">{test.totalMarks}</span>
+                      </div>
+                      <div>
+                        <span className="text-[10px] text-slate-500 uppercase font-bold block">Negative</span>
+                        <span className="text-sm font-black text-rose-600 font-mono mt-0.5 block">
+                          -{test.negativeMarking ?? 0.50}
                         </span>
                       </div>
                     </div>
 
-                    <h3 className="text-base font-bold text-slate-900 font-display group-hover:text-indigo-600 transition-colors leading-tight">
-                      {test.title}
-                    </h3>
-                    {test.hindiTitle && (
-                      <p className="text-xs text-slate-600 font-medium leading-relaxed">
-                        {test.hindiTitle}
-                      </p>
-                    )}
-
-                    {/* Meta Specs */}
-                    <div className="grid grid-cols-3 gap-2 py-2 border-y border-slate-100 text-xs">
-                      <div>
-                        <span className="text-[10px] text-slate-400 block">Questions</span>
-                        <span className="font-bold text-slate-800 font-mono">{test.totalQuestions} Qs</span>
+                    {/* Exam Simulation Benefits List */}
+                    <div className="grid grid-cols-2 gap-2 text-[11px] text-slate-600 font-medium pt-1">
+                      <div className="flex items-center gap-1.5">
+                        <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                        <span>Instant All-India Rank</span>
                       </div>
-                      <div>
-                        <span className="text-[10px] text-slate-400 block">Duration</span>
-                        <span className="font-bold text-slate-800 font-mono">{test.durationMinutes} Mins</span>
+                      <div className="flex items-center gap-1.5">
+                        <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                        <span>Bilingual Solutions</span>
                       </div>
-                      <div>
-                        <span className="text-[10px] text-slate-400 block">Maximum Marks</span>
-                        <span className="font-bold text-slate-800 font-mono">{test.totalMarks} Marks</span>
+                      <div className="flex items-center gap-1.5">
+                        <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                        <span>NTA Standard CBT Screen</span>
+                      </div>
+                      <div className="flex items-center gap-1.5">
+                        <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                        <span>Percentile Breakdown</span>
                       </div>
                     </div>
 
                     {/* Syllabus Chips */}
                     <div>
-                      <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wide mb-1.5">
-                        Key Syllabus Covered:
+                      <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5">
+                        Syllabus Modules Covered:
                       </p>
                       <div className="flex flex-wrap gap-1.5">
                         {test.syllabusCovered.map((s, i) => (
-                          <span key={i} className="text-[10px] bg-slate-50 text-slate-700 px-2 py-0.5 rounded border border-slate-200">
+                          <span key={i} className="text-[10px] font-semibold bg-white text-slate-700 px-2 py-0.5 rounded-md border border-slate-200">
                             {s}
                           </span>
                         ))}
                       </div>
                     </div>
 
-                    {/* Associated Book link */}
+                    {/* Associated Book recommendation */}
                     {matchedBook && (
                       <div 
                         onClick={() => handleViewAssociatedBook(matchedBook.id)}
-                        className="p-2.5 bg-indigo-50/60 rounded-xl border border-indigo-100 flex items-center justify-between text-xs cursor-pointer hover:bg-indigo-50 transition-colors"
+                        className="p-3 bg-indigo-50/70 hover:bg-indigo-100/70 rounded-2xl border border-indigo-200/80 flex items-center justify-between text-xs cursor-pointer transition-colors"
                       >
-                        <div className="flex items-center gap-2">
-                          <BookOpen className="w-3.5 h-3.5 text-indigo-600" />
-                          <span className="text-indigo-950 truncate max-w-[240px]">
-                            Recommended Book: <strong>{matchedBook.title}</strong>
+                        <div className="flex items-center gap-2.5 min-w-0">
+                          <div className="w-7 h-7 rounded-lg bg-indigo-600 text-white flex items-center justify-center shrink-0">
+                            <BookOpen className="w-3.5 h-3.5" />
+                          </div>
+                          <span className="text-indigo-950 font-bold truncate">
+                            Recommended Book: {matchedBook.title}
                           </span>
                         </div>
-                        <span className="text-indigo-600 text-[11px] font-bold shrink-0">View Book →</span>
+                        <span className="text-indigo-700 text-xs font-black shrink-0 ml-2">Book Details →</span>
                       </div>
                     )}
                   </div>
 
-                  {/* Pricing & Actions */}
-                  <div className="pt-2 flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-t border-slate-100">
+                  {/* Pricing HUD & Big Primary Action */}
+                  <div className="pt-3 border-t border-slate-200/80 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                     <div>
-                      <div className="flex items-center gap-1.5">
-                        <span className="text-base font-extrabold text-emerald-700 font-mono">₹0 FREE</span>
-                        <span className="text-xs line-through text-slate-400 font-semibold">₹499</span>
-                        <span className="text-[10px] bg-emerald-100 text-emerald-800 font-bold px-1.5 py-0.2 rounded">
+                      <div className="flex items-center gap-2">
+                        <span className="text-xl font-black text-emerald-700 font-mono">₹0 FREE</span>
+                        <span className="text-xs line-through text-slate-400 font-semibold font-mono">₹499</span>
+                        <span className="text-[10px] bg-emerald-100 text-emerald-900 font-black px-2 py-0.5 rounded-md">
                           100% Scholarship
                         </span>
                       </div>
-                      <span className="text-[10px] text-slate-500 flex items-center gap-1 mt-0.5">
+                      <span className="text-[11px] text-slate-500 flex items-center gap-1.5 mt-1">
+                        <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
                         <Users className="w-3 h-3 text-slate-400" />
-                        <span>{test.enrolledStudents.toLocaleString()} Enrolled</span>
+                        <span>{test.enrolledStudents.toLocaleString()}+ Candidates Attempted</span>
                       </span>
                     </div>
 
                     <button
                       onClick={() => handleStartTest(test)}
-                      className="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl shadow-md hover:shadow-lg transition-all flex items-center justify-center gap-1.5 cursor-pointer"
+                      className="px-6 py-3 bg-gradient-to-r from-emerald-600 to-teal-700 hover:from-emerald-500 hover:to-teal-600 text-white font-extrabold text-xs sm:text-sm rounded-2xl shadow-md hover:shadow-lg transition-all flex items-center justify-center gap-2 cursor-pointer group-hover:scale-[1.02]"
                     >
-                      <Play className="w-3.5 h-3.5 fill-current" />
-                      <span>Start CBT Test (₹0)</span>
+                      <Play className="w-4 h-4 fill-current" />
+                      <span>Start CBT Mock / टेस्ट शुरू करें</span>
                     </button>
                   </div>
                 </div>

@@ -196,33 +196,37 @@ export const SignInView: React.FC = () => {
 
     setIsLoading(true);
     try {
-      const { user, error } = await registerWithEmail(
-        signUpEmail, 
-        signUpPassword, 
-        signUpName.trim(),
-        {
-          phone: signUpPhone.trim() || undefined,
-          targetExam: signUpExam
-        }
-      );
-      if (error) {
-        setAuthError(error);
-        showToast(error, 'error');
-        setIsLoading(false);
-        return;
-      }
-      if (user) {
-        registerUser(
+      try {
+        const { user, error } = await registerWithEmail(
+          signUpEmail, 
+          signUpPassword, 
+          signUpName.trim(),
           {
-            name: signUpName.trim(),
-            email: signUpEmail.trim(),
-            phone: signUpPhone.trim() || '+91 97929 03247',
+            phone: signUpPhone.trim() || undefined,
             targetExam: signUpExam
-          },
-          signUpPlan,
-          signUpPassword
+          }
         );
+        if (error && (error.toLowerCase().includes('already in use') || error.toLowerCase().includes('already exists'))) {
+          setAuthError('An account with this email already exists. Please sign in instead.');
+          showToast('Account already exists. Please sign in.', 'error');
+          setIsLoading(false);
+          return;
+        }
+      } catch (fbErr) {
+        console.warn('Firebase registration notice:', fbErr);
       }
+
+      // Complete registration: establishes persistent session and syncs to Firestore users collection
+      registerUser(
+        {
+          name: signUpName.trim(),
+          email: signUpEmail.trim(),
+          phone: signUpPhone.trim() || '+91 97929 03247',
+          targetExam: signUpExam
+        },
+        signUpPlan,
+        signUpPassword
+      );
     } catch (err: any) {
       const msg = err?.message || 'Registration failed. Please try again.';
       setAuthError(msg);

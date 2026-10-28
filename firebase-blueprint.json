@@ -12,6 +12,7 @@
         "phone": { "type": "string", "maxLength": 25 },
         "role": { "type": "string", "enum": ["admin", "student"], "maxLength": 20 },
         "targetExam": { "type": "string", "maxLength": 100 },
+        "rollNumber": { "type": "string", "maxLength": 64 },
         "createdAt": { "type": "string", "maxLength": 64 },
         "updatedAt": { "type": "string", "maxLength": 64 }
       },
@@ -52,6 +53,85 @@
         "completedAt": { "type": "string", "maxLength": 64 }
       },
       "required": ["attemptId", "userId", "testId", "score"]
+    },
+    "currentAffair": {
+      "title": "CurrentAffair",
+      "description": "Daily current affairs article capsule, key takeaways, and practice quiz",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "title": { "type": "string", "maxLength": 250 },
+        "date": { "type": "string", "maxLength": 50 },
+        "category": { "type": "string", "maxLength": 80 },
+        "readTime": { "type": "string", "maxLength": 30 },
+        "imageUrl": { "type": "string", "maxLength": 2000 },
+        "summary": { "type": "string", "maxLength": 5000 },
+        "pdfUrl": { "type": "string", "maxLength": 2000 },
+        "createdAt": { "type": "string", "maxLength": 64 }
+      },
+      "required": ["id", "title", "date", "category"]
+    },
+    "freePdf": {
+      "title": "FreePdf",
+      "description": "Downloadable PDF educational capsule, mindmap, and formula sheet",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "title": { "type": "string", "maxLength": 250 },
+        "category": { "type": "string", "maxLength": 80 },
+        "subject": { "type": "string", "maxLength": 100 },
+        "fileSize": { "type": "string", "maxLength": 30 },
+        "pages": { "type": "number" },
+        "downloadUrl": { "type": "string", "maxLength": 2000 },
+        "createdAt": { "type": "string", "maxLength": 64 }
+      },
+      "required": ["id", "title", "category", "subject"]
+    },
+    "videoLecture": {
+      "title": "VideoLecture",
+      "description": "Institutional faculty video lecture with syllabus modules",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "title": { "type": "string", "maxLength": 250 },
+        "category": { "type": "string", "maxLength": 80 },
+        "faculty": { "type": "string", "maxLength": 100 },
+        "duration": { "type": "string", "maxLength": 50 },
+        "youtubeUrl": { "type": "string", "maxLength": 2000 },
+        "createdAt": { "type": "string", "maxLength": 64 }
+      },
+      "required": ["id", "title", "category", "faculty"]
+    },
+    "testSeries": {
+      "title": "TestSeries",
+      "description": "All India CBT Mock Test Series with questions, options, and explanations",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "title": { "type": "string", "maxLength": 250 },
+        "category": { "type": "string", "maxLength": 80 },
+        "durationMinutes": { "type": "number" },
+        "totalMarks": { "type": "number" },
+        "questionsCount": { "type": "number" },
+        "createdAt": { "type": "string", "maxLength": 64 }
+      },
+      "required": ["id", "title", "category"]
+    },
+    "book": {
+      "title": "Book",
+      "description": "BooksBoon physical publication or magazine listing",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "title": { "type": "string", "maxLength": 250 },
+        "author": { "type": "string", "maxLength": 100 },
+        "category": { "type": "string", "maxLength": 80 },
+        "paperbackPrice": { "type": "number" },
+        "originalPrice": { "type": "number" },
+        "pages": { "type": "number" },
+        "createdAt": { "type": "string", "maxLength": 64 }
+      },
+      "required": ["id", "title", "author", "category", "paperbackPrice"]
     }
   },
   "firestore": {
@@ -66,6 +146,26 @@
     "/testAttempts/{attemptId}": {
       "schema": { "$ref": "#/entities/testAttempt" },
       "description": "Mock test examination attempts and analytics scores"
+    },
+    "/current_affairs/{articleId}": {
+      "schema": { "$ref": "#/entities/currentAffair" },
+      "description": "Published daily current affairs articles readable by all visitors"
+    },
+    "/free_pdfs/{pdfId}": {
+      "schema": { "$ref": "#/entities/freePdf" },
+      "description": "Downloadable free study material PDFs readable by all visitors"
+    },
+    "/video_lectures/{videoId}": {
+      "schema": { "$ref": "#/entities/videoLecture" },
+      "description": "Recorded and live faculty video lectures readable by all visitors"
+    },
+    "/test_series/{testId}": {
+      "schema": { "$ref": "#/entities/testSeries" },
+      "description": "CBT mock tests and quiz series readable by all visitors"
+    },
+    "/books/{bookId}": {
+      "schema": { "$ref": "#/entities/book" },
+      "description": "BooksBoon bookstore publications catalog readable by all visitors"
     }
   }
 }

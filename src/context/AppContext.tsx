@@ -13,7 +13,8 @@ import {
   VideoLecture,
   TestSeriesExam,
   UserTestScore,
-  HardCopyOrder
+  HardCopyOrder,
+  AppLanguage
 } from '../types';
 import { 
   BOOKS_DATA, 
@@ -33,7 +34,23 @@ import {
   onAuthStateChanged, 
   logOutUser, 
   persistOrderToFirestore, 
-  persistTestScoreToFirestore 
+  persistTestScoreToFirestore,
+  saveCurrentAffairToFirestore,
+  deleteCurrentAffairFromFirestore,
+  subscribeToCurrentAffairs,
+  saveFreePdfToFirestore,
+  deleteFreePdfFromFirestore,
+  subscribeToFreePdfs,
+  saveTestSeriesToFirestore,
+  subscribeToTestSeries,
+  saveVideoLectureToFirestore,
+  subscribeToVideoLectures,
+  saveBookToFirestore,
+  subscribeToBooks,
+  getAllUsersFromFirestore,
+  getUserProfileFromFirestore,
+  syncUserProfile,
+  saveUserProfileToFirestore
 } from '../services/firebase';
 
 interface AppContextType {
@@ -73,6 +90,7 @@ interface AppContextType {
   // Institute Free PDFs & Study Material
   freePdfs: FreePdfResource[];
   addFreePdf: (pdf: FreePdfResource) => void;
+  deleteFreePdf: (id: string) => void;
   bookmarkPdf: (id: string) => void;
   studyMaterials: StudyMaterialItem[];
   addStudyMaterial: (item: StudyMaterialItem) => void;
@@ -124,6 +142,8 @@ interface AppContextType {
   setSearchQuery: (query: string) => void;
   filterCategory: string;
   setFilterCategory: (cat: string) => void;
+  appLanguage: AppLanguage;
+  setAppLanguage: (lang: AppLanguage) => void;
 }
 
 // Authorized Administrator Gmail Accounts
@@ -131,7 +151,8 @@ export const AUTHORIZED_ADMIN_EMAILS = [
   'shukla.mohit52@gmail.com',
   'booksboon17@gmail.com',
   'sgi181069@gmail.com',
-  'spiindia181069@gmail.com'
+  'spiindia181069@gmail.com',
+  'archanashuklashukla58@gmail.com'
 ] as const;
 
 export const isAuthorizedAdmin = (email?: string | null): boolean => {
@@ -189,38 +210,118 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   }, [isAdmin]);
 
-  // Listen to Firebase Auth state changes
+  // Listen to Firebase Auth state changes with remote profile synchronization
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (firebaseUser) => {
+    const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
       if (firebaseUser) {
         const userEmail = firebaseUser.email || '';
         const userIsAdmin = isAuthorizedAdmin(userEmail);
         
-        setUser(prev => {
-          if (prev && prev.email === userEmail) {
-            return {
-              ...prev,
-              isAdmin: userIsAdmin
-            };
-          }
-          return {
-            ...INITIAL_USER,
-            id: firebaseUser.uid,
-            email: userEmail,
-            name: firebaseUser.displayName || (userEmail ? userEmail.split('@')[0] : 'Learner'),
-            phone: firebaseUser.phoneNumber || '+91 97929 03247',
-            authProvider: firebaseUser.providerData[0]?.providerId.includes('google')
-              ? 'google'
-              : firebaseUser.providerData[0]?.providerId.includes('facebook')
-              ? 'facebook'
-              : 'email',
-            avatar: firebaseUser.photoURL || undefined,
-            isAdmin: userIsAdmin
-          };
-        });
+        let remoteProfile: any = null;
+        try {
+          remoteProfile = await getUserProfileFromFirestore(firebaseUser.uid);
+        } catch (e) {
+          console.warn('Could not fetch remote profile:', e);
+        }
+
+        const resolvedUser: UserProfile = {
+          ...INITIAL_USER,
+          id: firebaseUser.uid,
+          email: userEmail,
+          name: remoteProfile?.displayName || remoteProfile?.name || firebaseUser.displayName || (userEmail ? userEmail.split('@')[0] : 'Learner'),
+          phone: remoteProfile?.phone || firebaseUser.phoneNumber || '+91 97929 03247',
+          authProvider: firebaseUser.providerData[0]?.providerId.includes('google')
+            ? 'google'
+            : firebaseUser.providerData[0]?.providerId.includes('facebook')
+            ? 'facebook'
+            : 'email',
+          avatar: remoteProfile?.photoURL || firebaseUser.photoURL || undefined,
+          targetExam: remoteProfile?.targetExam || 'SSC CGL & Railway NTPC',
+          rollNumber: remoteProfile?.rollNumber || `SAM-2026-${firebaseUser.uid.slice(0, 4)}`,
+          isAdmin: userIsAdmin
+        };
+
+        setUser(resolvedUser);
+        try {
+          localStorage.setItem('samwedna_active_session_user', JSON.stringify(resolvedUser));
+        } catch (e) {
+          console.error(e);
+        }
       }
     });
     return () => unsubscribe();
+  }, []);
+
+  // Real-time Firestore subscriptions for live reflections across all visitors
+  useEffect(() => {
+    const unsubCa = subscribeToCurrentAffairs((articles) => {
+      if (articles && articles.length > 0) {
+        setCurrentAffairs(articles);
+        try {
+          localStorage.setItem('samwedna_ca', JSON.stringify(articles));
+        } catch (e) { console.error(e); }
+      }
+    });
+
+    const unsubPdfs = subscribeToFreePdfs((pdfs) => {
+      if (pdfs && pdfs.length > 0) {
+        setFreePdfs(pdfs);
+        try {
+          localStorage.setItem('samwedna_pdfs', JSON.stringify(pdfs));
+        } catch (e) { console.error(e); }
+      }
+    });
+
+    const unsubTests = subscribeToTestSeries((tests) => {
+      if (tests && tests.length > 0) {
+        setTestSeriesList(tests);
+        try {
+          localStorage.setItem('samwedna_tests', JSON.stringify(tests));
+        } catch (e) { console.error(e); }
+      }
+    });
+
+    const unsubVideos = subscribeToVideoLectures((videos) => {
+      if (videos && videos.length > 0) {
+        setVideoLectures(videos);
+        try {
+          localStorage.setItem('samwedna_videos', JSON.stringify(videos));
+        } catch (e) { console.error(e); }
+      }
+    });
+
+    const unsubBooks = subscribeToBooks((books) => {
+      if (books && books.length > 0) {
+        setBooksCatalog(books);
+        try {
+          localStorage.setItem('samwedna_books', JSON.stringify(books));
+        } catch (e) { console.error(e); }
+      }
+    });
+
+    // Real Registered Users from Firestore
+    getAllUsersFromFirestore().then((remoteUsers) => {
+      if (remoteUsers && remoteUsers.length > 0) {
+        setStudentsList(prev => {
+          const map = new Map<string, UserProfile>();
+          remoteUsers.forEach(u => map.set(u.email.toLowerCase(), u));
+          prev.forEach(u => {
+            if (!map.has(u.email.toLowerCase())) {
+              map.set(u.email.toLowerCase(), u);
+            }
+          });
+          return Array.from(map.values());
+        });
+      }
+    }).catch(console.warn);
+
+    return () => {
+      unsubCa && unsubCa();
+      unsubPdfs && unsubPdfs();
+      unsubTests && unsubTests();
+      unsubVideos && unsubVideos();
+      unsubBooks && unsubBooks();
+    };
   }, []);
 
   // Persisted cart
@@ -385,7 +486,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const updateStudentDetails = (studentId: string, data: Partial<UserProfile>) => {
-    setStudentsList(prev => prev.map(s => s.id === studentId ? { ...s, ...data } : s));
+    setStudentsList(prev => {
+      const updated = prev.map(s => s.id === studentId ? { ...s, ...data } : s);
+      const student = updated.find(s => s.id === studentId);
+      if (student) {
+        saveUserProfileToFirestore(student).catch(console.warn);
+      }
+      return updated;
+    });
     if (user && user.id === studentId) {
       setUser(prev => prev ? { ...prev, ...data } : null);
     }
@@ -401,18 +509,44 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [filterCategory, setFilterCategory] = useState<string>('All');
 
+  // Persistent Bilingual Language Selector: 'BILINGUAL' | 'HI' | 'EN'
+  const [appLanguage, setAppLanguageState] = useState<AppLanguage>(() => {
+    try {
+      const saved = localStorage.getItem('samwedna_app_lang');
+      return (saved as AppLanguage) || 'BILINGUAL';
+    } catch {
+      return 'BILINGUAL';
+    }
+  });
+
+  const setAppLanguage = (lang: AppLanguage) => {
+    setAppLanguageState(lang);
+    try {
+      localStorage.setItem('samwedna_app_lang', lang);
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  // Keep active user session in localStorage so user remains logged in across browser restarts
   useEffect(() => {
     try {
       if (user) {
         localStorage.setItem('samwedna_active_session_user', JSON.stringify(user));
-      } else {
-        localStorage.removeItem('samwedna_active_session_user');
-        localStorage.removeItem('samwedna_user');
       }
     } catch (e) {
       console.error(e);
     }
   }, [user]);
+
+  // Keep students directory synchronized in localStorage
+  useEffect(() => {
+    try {
+      localStorage.setItem('samwedna_students', JSON.stringify(studentsList));
+    } catch (e) {
+      console.error(e);
+    }
+  }, [studentsList]);
 
   useEffect(() => {
     try {
@@ -549,33 +683,55 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     showToast(exists ? 'PDF removed from bookmarks' : 'PDF saved to your Student Library!', 'success');
   };
 
-  // Admin creators & managers
-  const addCurrentAffair = (article: CurrentAffairArticle) => {
-    const updated = [article, ...currentAffairs];
+  // Admin creators & managers with Firestore synchronization
+  const addCurrentAffair = async (article: CurrentAffairArticle) => {
+    const updated = [article, ...currentAffairs.filter(a => a.id !== article.id)];
     setCurrentAffairs(updated);
-    localStorage.setItem('samwedna_ca', JSON.stringify(updated));
-    showToast('Daily Current Affairs article published successfully!', 'success');
+    try {
+      localStorage.setItem('samwedna_ca', JSON.stringify(updated));
+    } catch (e) { console.error(e); }
+    await saveCurrentAffairToFirestore(article);
+    showToast('Daily Current Affairs article published and synced to website!', 'success');
   };
 
-  const updateCurrentAffair = (article: CurrentAffairArticle) => {
+  const updateCurrentAffair = async (article: CurrentAffairArticle) => {
     const updated = currentAffairs.map(a => a.id === article.id ? article : a);
     setCurrentAffairs(updated);
-    localStorage.setItem('samwedna_ca', JSON.stringify(updated));
-    showToast('Current affairs article and topic banner updated successfully!', 'success');
+    try {
+      localStorage.setItem('samwedna_ca', JSON.stringify(updated));
+    } catch (e) { console.error(e); }
+    await saveCurrentAffairToFirestore(article);
+    showToast('Current affairs article updated and synced across website!', 'success');
   };
 
-  const deleteCurrentAffair = (id: string) => {
+  const deleteCurrentAffair = async (id: string) => {
     const updated = currentAffairs.filter(a => a.id !== id);
     setCurrentAffairs(updated);
-    localStorage.setItem('samwedna_ca', JSON.stringify(updated));
+    try {
+      localStorage.setItem('samwedna_ca', JSON.stringify(updated));
+    } catch (e) { console.error(e); }
+    await deleteCurrentAffairFromFirestore(id);
     showToast('Current affairs article deleted successfully', 'info');
   };
 
-  const addFreePdf = (pdf: FreePdfResource) => {
-    const updated = [pdf, ...freePdfs];
+  const addFreePdf = async (pdf: FreePdfResource) => {
+    const updated = [pdf, ...freePdfs.filter(p => p.id !== pdf.id)];
     setFreePdfs(updated);
-    localStorage.setItem('samwedna_pdfs', JSON.stringify(updated));
-    showToast('Free PDF study material uploaded successfully!', 'success');
+    try {
+      localStorage.setItem('samwedna_pdfs', JSON.stringify(updated));
+    } catch (e) { console.error(e); }
+    await saveFreePdfToFirestore(pdf);
+    showToast('Free PDF study material uploaded and synced across website!', 'success');
+  };
+
+  const deleteFreePdf = async (id: string) => {
+    const updated = freePdfs.filter(p => p.id !== id);
+    setFreePdfs(updated);
+    try {
+      localStorage.setItem('samwedna_pdfs', JSON.stringify(updated));
+    } catch (e) { console.error(e); }
+    await deleteFreePdfFromFirestore(id);
+    showToast('PDF study resource deleted successfully', 'info');
   };
 
   const addStudyMaterial = (item: StudyMaterialItem) => {
@@ -585,25 +741,34 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     showToast('Study Material note published successfully!', 'success');
   };
 
-  const addVideoLecture = (lecture: VideoLecture) => {
-    const updated = [lecture, ...videoLectures];
+  const addVideoLecture = async (lecture: VideoLecture) => {
+    const updated = [lecture, ...videoLectures.filter(v => v.id !== lecture.id)];
     setVideoLectures(updated);
-    localStorage.setItem('samwedna_videos', JSON.stringify(updated));
-    showToast('Video Lecture link uploaded successfully!', 'success');
+    try {
+      localStorage.setItem('samwedna_videos', JSON.stringify(updated));
+    } catch (e) { console.error(e); }
+    await saveVideoLectureToFirestore(lecture);
+    showToast('Video Lecture link uploaded and synced across website!', 'success');
   };
 
-  const addTestSeries = (test: TestSeriesExam) => {
-    const updated = [test, ...testSeriesList];
+  const addTestSeries = async (test: TestSeriesExam) => {
+    const updated = [test, ...testSeriesList.filter(t => t.id !== test.id)];
     setTestSeriesList(updated);
-    localStorage.setItem('samwedna_tests', JSON.stringify(updated));
-    showToast(`CBT Mock Test "${test.title}" created successfully!`, 'success');
+    try {
+      localStorage.setItem('samwedna_tests', JSON.stringify(updated));
+    } catch (e) { console.error(e); }
+    await saveTestSeriesToFirestore(test);
+    showToast(`CBT Mock Test "${test.title}" created and synced across website!`, 'success');
   };
 
-  const addBookToCatalog = (book: Book) => {
-    const updated = [book, ...booksCatalog];
+  const addBookToCatalog = async (book: Book) => {
+    const updated = [book, ...booksCatalog.filter(b => b.id !== book.id)];
     setBooksCatalog(updated);
-    localStorage.setItem('samwedna_books', JSON.stringify(updated));
-    showToast(`Book/Magazine "${book.title}" added to BooksBoon catalog!`, 'success');
+    try {
+      localStorage.setItem('samwedna_books', JSON.stringify(updated));
+    } catch (e) { console.error(e); }
+    await saveBookToFirestore(book);
+    showToast(`Book/Magazine "${book.title}" added and synced to BooksBoon store!`, 'success');
   };
 
   const downloadBookToLibrary = (book: Book): { success: boolean; reason?: string } => {
@@ -666,6 +831,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         resolvedName = 'Samwedna Institute Administrator';
       } else if (cleanEmail === 'spiindia181069@gmail.com') {
         resolvedName = 'Samwedna Prakashan Administrator';
+      } else if (cleanEmail === 'archanashuklashukla58@gmail.com') {
+        resolvedName = 'Archana Shukla';
       } else {
         resolvedName = email.split('@')[0].toUpperCase() || 'Learner';
       }
@@ -694,6 +861,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     };
 
     setUser(loggedInUser);
+    try {
+      localStorage.setItem('samwedna_active_session_user', JSON.stringify(loggedInUser));
+    } catch (e) {
+      console.error(e);
+    }
     if (userIsAdmin) {
       setAdminAuthenticated(true);
       showToast(`Welcome Administrator, ${loggedInUser.name}! Admin console unlocked.`, 'success');
@@ -727,6 +899,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     if (user) {
       const updated = { ...user, ...data };
       setUser(updated);
+      try {
+        localStorage.setItem('samwedna_active_session_user', JSON.stringify(updated));
+      } catch (e) {
+        console.error(e);
+      }
       setStudentsList(prev => prev.map(s => s.id === user.id ? { ...s, ...data } : s));
       showToast('Profile updated successfully!', 'success');
     }
@@ -786,10 +963,24 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     };
 
     setUser(newUser);
+    try {
+      localStorage.setItem('samwedna_active_session_user', JSON.stringify(newUser));
+    } catch (e) {
+      console.error(e);
+    }
     setStudentsList(prev => {
       const filtered = prev.filter(s => s.email.toLowerCase() !== newUser.email.toLowerCase());
       return [newUser, ...filtered];
     });
+
+    // Sync new student profile to Firestore
+    syncUserProfile(
+      auth.currentUser || ({ uid: newUser.id, email: newUser.email, displayName: newUser.name } as any),
+      'email',
+      { displayName: newUser.name, phone: newUser.phone, targetExam: newUser.targetExam }
+    ).catch(console.warn);
+    saveUserProfileToFirestore(newUser).catch(console.warn);
+
     showToast(`Welcome to Samwedna! Your Student ID is ${newUser.rollNumber}`, 'success');
     setCurrentView('student-dashboard');
     setAccountTab('dashboard');
@@ -834,6 +1025,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         // PDFs & Study Material
         freePdfs,
         addFreePdf,
+        deleteFreePdf,
         bookmarkPdf,
         studyMaterials,
         addStudyMaterial,
@@ -884,7 +1076,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         searchQuery,
         setSearchQuery,
         filterCategory,
-        setFilterCategory
+        setFilterCategory,
+        appLanguage,
+        setAppLanguage
       }}
     >
       {children}

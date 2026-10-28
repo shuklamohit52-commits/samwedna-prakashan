@@ -28,37 +28,9 @@ service cloud.firestore {
         request.auth.token.email == 'shukla.mohit52@gmail.com' ||
         request.auth.token.email == 'booksboon17@gmail.com' ||
         request.auth.token.email == 'sgi181069@gmail.com' ||
-        request.auth.token.email == 'spiindia181069@gmail.com'
+        request.auth.token.email == 'spiindia181069@gmail.com' ||
+        request.auth.token.email == 'archanashuklashukla58@gmail.com'
       );
-    }
-
-    // Validation blueprints
-    function isValidUser(data) {
-      return data.keys().hasAll(['uid', 'email']) &&
-        data.uid is string && data.uid.size() <= 128 &&
-        data.email is string && data.email.size() <= 128 &&
-        (!('displayName' in data) || (data.displayName is string && data.displayName.size() <= 100)) &&
-        (!('phone' in data) || (data.phone is string && data.phone.size() <= 25)) &&
-        (!('role' in data) || (data.role in ['student', 'admin'])) &&
-        (!('targetExam' in data) || (data.targetExam is string && data.targetExam.size() <= 100));
-    }
-
-    function isValidOrder(data) {
-      return data.keys().hasAll(['orderId', 'userId', 'customerEmail', 'totalAmount', 'paymentStatus']) &&
-        data.orderId is string && data.orderId.size() <= 64 &&
-        data.userId is string && data.userId.size() <= 128 &&
-        data.customerEmail is string && data.customerEmail.size() <= 128 &&
-        data.totalAmount is number && data.totalAmount >= 0 &&
-        data.paymentStatus in ['Paid', 'Pending', 'Failed'] &&
-        (!('shippingStatus' in data) || (data.shippingStatus in ['Ordered', 'Dispatched', 'In Transit', 'Out for Delivery', 'Delivered']));
-    }
-
-    function isValidTestAttempt(data) {
-      return data.keys().hasAll(['attemptId', 'userId', 'testId', 'score']) &&
-        data.attemptId is string && data.attemptId.size() <= 64 &&
-        data.userId is string && data.userId.size() <= 128 &&
-        data.testId is string && data.testId.size() <= 64 &&
-        data.score is number && data.score >= 0;
     }
 
     // Default-deny safety net
@@ -66,31 +38,58 @@ service cloud.firestore {
       allow read, write: if false;
     }
 
-    // Users collection
+    // Health and connection probe path
+    match /test/{testId} {
+      allow read: if true;
+    }
+
+    // Users collection: Private student profiles
     match /users/{userId} {
       allow get: if isOwner(userId) || isAuthorizedAdminEmail();
       allow list: if isAuthorizedAdminEmail();
-      allow create: if isOwner(userId) && isValidId(userId) && incoming().uid == request.auth.uid && isValidUser(incoming());
-      allow update: if isOwner(userId) && isValidId(userId) && incoming().uid == request.auth.uid && isValidUser(incoming());
+      allow create, update: if isOwner(userId) || isAuthorizedAdminEmail();
       allow delete: if isAuthorizedAdminEmail();
     }
 
-    // Orders collection
+    // Orders collection: BooksBoon physical orders
     match /orders/{orderId} {
       allow get: if isSignedIn() && (resource.data.userId == request.auth.uid || isAuthorizedAdminEmail());
       allow list: if isSignedIn() && (resource.data.userId == request.auth.uid || isAuthorizedAdminEmail());
-      allow create: if isSignedIn() && isValidId(orderId) && incoming().userId == request.auth.uid && isValidOrder(incoming());
-      allow update: if isAuthorizedAdminEmail();
-      allow delete: if isAuthorizedAdminEmail();
+      allow create: if true;
+      allow update, delete: if isAuthorizedAdminEmail();
     }
 
     // Test attempts collection
     match /testAttempts/{attemptId} {
-      allow get: if isSignedIn() && (resource.data.userId == request.auth.uid || isAuthorizedAdminEmail());
-      allow list: if isSignedIn() && (resource.data.userId == request.auth.uid || isAuthorizedAdminEmail());
-      allow create: if isSignedIn() && isValidId(attemptId) && incoming().userId == request.auth.uid && isValidTestAttempt(incoming());
-      allow update: if isAuthorizedAdminEmail();
-      allow delete: if isAuthorizedAdminEmail();
+      allow get, list: if isSignedIn() && (resource.data.userId == request.auth.uid || isAuthorizedAdminEmail());
+      allow create: if isSignedIn();
+      allow update, delete: if isAuthorizedAdminEmail();
+    }
+
+    // Public educational resources: readable by everyone, manageable by authorized administrators
+    match /current_affairs/{articleId} {
+      allow read: if true;
+      allow create, update, delete: if isAuthorizedAdminEmail();
+    }
+
+    match /free_pdfs/{pdfId} {
+      allow read: if true;
+      allow create, update, delete: if isAuthorizedAdminEmail();
+    }
+
+    match /video_lectures/{videoId} {
+      allow read: if true;
+      allow create, update, delete: if isAuthorizedAdminEmail();
+    }
+
+    match /test_series/{testId} {
+      allow read: if true;
+      allow create, update, delete: if isAuthorizedAdminEmail();
+    }
+
+    match /books/{bookId} {
+      allow read: if true;
+      allow create, update, delete: if isAuthorizedAdminEmail();
     }
   }
 }

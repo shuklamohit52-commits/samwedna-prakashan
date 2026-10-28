@@ -272,14 +272,7 @@ export const HomeView: React.FC = () => {
         </div>
       </section>
 
-      {/* 2. Red Box Marquee Moving All Across */}
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="rounded-2xl overflow-hidden shadow-xl border border-red-500/80 animate-red-glow">
-          <RedTickerBar speed="normal" />
-        </div>
-      </div>
-
-      {/* 3. The Two Main Pillars Segmented Showcase */}
+      {/* 2. The Two Main Pillars Segmented Showcase */}
       <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-8">
         
         <div className="text-center space-y-3">

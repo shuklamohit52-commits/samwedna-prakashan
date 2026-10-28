@@ -20,7 +20,8 @@ import {
   Package,
   Key,
   Flame,
-  ArrowRight
+  ArrowRight,
+  Languages
 } from 'lucide-react';
 import { PageView } from '../types';
 import { RedTickerBar } from './RedTickerBar';
@@ -38,7 +39,9 @@ export const Navbar: React.FC = () => {
     setAccountTab,
     searchQuery,
     setSearchQuery,
-    setFilterCategory
+    setFilterCategory,
+    appLanguage,
+    setAppLanguage
   } = useApp();
 
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -79,126 +82,199 @@ export const Navbar: React.FC = () => {
       {/* 1. Dynamic Red Box Marquee Moving All Across for New Releases */}
       <RedTickerBar />
 
-      {/* 2. Top Segmented Dual-Portal Switcher (BooksBoon.com vs Samwedna Group of Institutes) */}
-      <div className="bg-slate-900 text-white border-b border-slate-800 text-xs">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex items-center justify-between h-10 gap-2">
-          
-          {/* Dual Category Tabs */}
-          <div className="flex items-center gap-1 sm:gap-2">
+      {/* 2. Top Segmented Dual-Portal Banner - Full Width & Prominent */}
+      <div className="w-full bg-slate-950 text-white border-b border-slate-800 py-3 px-4 sm:px-8">
+        <div className="w-full space-y-2.5">
+          {/* Micro Bar: National Helpline & Status & Admin Console */}
+          <div className="w-full flex flex-wrap items-center justify-between text-xs text-slate-400 pb-1.5 border-b border-slate-800/80 gap-2">
+            <div className="flex items-center gap-3">
+              <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-md bg-emerald-500/10 text-emerald-400 font-bold text-[11px] border border-emerald-500/20">
+                <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+                Official Admissions &amp; Books Delivery Portal 2026
+              </span>
+            </div>
+
+            {/* Global Bilingual Medium Switcher */}
+            <div className="flex items-center gap-1 bg-slate-900 border border-slate-800 rounded-xl p-0.5 text-[11px] font-bold">
+              <span className="px-2 text-slate-400 flex items-center gap-1">
+                <Languages className="w-3.5 h-3.5 text-cyan-400" />
+                <span className="hidden sm:inline">Medium:</span>
+              </span>
+              <button
+                type="button"
+                onClick={() => setAppLanguage('BILINGUAL')}
+                className={`px-2.5 py-1 rounded-lg transition-all cursor-pointer ${
+                  appLanguage === 'BILINGUAL'
+                    ? 'bg-indigo-600 text-white shadow-2xs font-bold'
+                    : 'text-slate-400 hover:text-white'
+                }`}
+                title="Bilingual / द्विभाषी (Hindi + English)"
+              >
+                द्विभाषी / Bilingual
+              </button>
+              <button
+                type="button"
+                onClick={() => setAppLanguage('HI')}
+                className={`px-2.5 py-1 rounded-lg transition-all cursor-pointer ${
+                  appLanguage === 'HI'
+                    ? 'bg-amber-500 text-slate-950 font-black shadow-2xs'
+                    : 'text-slate-400 hover:text-white'
+                }`}
+                title="हिन्दी माध्यम (Hindi Medium)"
+              >
+                हिन्दी
+              </button>
+              <button
+                type="button"
+                onClick={() => setAppLanguage('EN')}
+                className={`px-2.5 py-1 rounded-lg transition-all cursor-pointer ${
+                  appLanguage === 'EN'
+                    ? 'bg-indigo-600 text-white shadow-2xs font-bold'
+                    : 'text-slate-400 hover:text-white'
+                }`}
+                title="English Medium"
+              >
+                English
+              </button>
+            </div>
+
+            <div className="flex items-center gap-4">
+              {isAdmin && (
+                <button
+                  onClick={() => handleNavClick('admin')}
+                  className={`flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                    currentView === 'admin'
+                      ? 'bg-cyan-400 text-slate-950 shadow-sm'
+                      : 'bg-white/10 hover:bg-white/20 text-cyan-300 border border-cyan-400/30'
+                  }`}
+                  title="Admin Panel: Upload Quizzes, Daily CA, Free PDFs & Videos"
+                >
+                  <Key className="w-3.5 h-3.5" />
+                  <span>Admin Console</span>
+                </button>
+              )}
+              <div className="flex items-center gap-1.5 font-mono text-xs">
+                <span className="text-slate-400">Helpline:</span>
+                <a href="tel:+919792903247" className="text-amber-400 font-bold hover:underline">+91 9792903247</a>
+              </div>
+            </div>
+          </div>
+
+          {/* Dual Category Tabs Covering the Entire Page Width */}
+          <div className="w-full grid grid-cols-1 md:grid-cols-2 gap-3 sm:gap-4">
             <button
               onClick={handleSwitchToBooksboon}
-              className={`flex items-center gap-2 px-3 py-1 rounded-lg font-bold transition-all text-xs cursor-pointer ${
+              className={`w-full flex items-center gap-3.5 sm:gap-4 px-4 sm:px-6 py-3 sm:py-3.5 rounded-2xl font-bold transition-all text-left cursor-pointer border ${
                 portalMode === 'booksboon'
-                  ? 'bg-amber-500 text-slate-950 shadow-sm'
-                  : 'text-slate-400 hover:text-white hover:bg-slate-800'
+                  ? 'bg-gradient-to-r from-amber-500 via-amber-500 to-amber-600 text-slate-950 shadow-lg border-amber-300 ring-2 ring-amber-400/40'
+                  : 'bg-slate-900/90 text-slate-300 hover:text-white hover:bg-slate-900 border-slate-800'
               }`}
             >
-              <img 
-                src="https://cdn.jsdelivr.net/gh/luckymohittiwari52-oss/quiz-assets@main/images/bokbon.jpg" 
-                alt="BooksBoon" 
-                className="w-4 h-4 rounded-full object-cover shrink-0 border border-white/20"
-              />
-              <span>BOOKSBOON.COM</span>
-              <span className="hidden sm:inline text-[9px] bg-slate-950/20 px-1.5 py-0.2 rounded font-extrabold uppercase">
-                Hard Copies & Magazines
-              </span>
+              <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-2xl overflow-hidden bg-white p-1 shadow-sm shrink-0 border-2 border-amber-300">
+                <img 
+                  src="https://cdn.jsdelivr.net/gh/luckymohittiwari52-oss/quiz-assets@main/images/bokbon.jpg" 
+                  alt="BooksBoon" 
+                  className="w-full h-full object-contain rounded-xl"
+                />
+              </div>
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-base sm:text-lg lg:text-xl font-black tracking-tight leading-tight">
+                    BOOKSBOON.COM
+                  </span>
+                  <span className={`text-[10px] sm:text-xs px-2 py-0.5 rounded-md font-black uppercase tracking-wider ${portalMode === 'booksboon' ? 'bg-slate-950 text-amber-300' : 'bg-amber-500/20 text-amber-300 border border-amber-400/30'}`}>
+                    Physical Books Store
+                  </span>
+                </div>
+                <span className={`text-xs sm:text-sm block truncate font-medium mt-0.5 ${portalMode === 'booksboon' ? 'text-slate-950 font-semibold' : 'text-slate-400'}`}>
+                  Hard Copies, Reference Books &amp; Exam Magazines Delivered Across India
+                </span>
+              </div>
             </button>
 
             <button
               onClick={handleSwitchToInstitute}
-              className={`flex items-center gap-2 px-3 py-1 rounded-lg font-bold transition-all text-xs cursor-pointer ${
+              className={`w-full flex items-center gap-3.5 sm:gap-4 px-4 sm:px-6 py-3 sm:py-3.5 rounded-2xl font-bold transition-all text-left cursor-pointer border ${
                 portalMode === 'institute'
-                  ? 'bg-indigo-600 text-white shadow-sm'
-                  : 'text-slate-400 hover:text-white hover:bg-slate-800'
+                  ? 'bg-gradient-to-r from-indigo-600 via-indigo-600 to-indigo-700 text-white shadow-lg border-indigo-400 ring-2 ring-indigo-400/40'
+                  : 'bg-slate-900/90 text-slate-300 hover:text-white hover:bg-slate-900 border-slate-800'
               }`}
             >
-              <img 
-                src="https://cdn.jsdelivr.net/gh/luckymohittiwari52-oss/quiz-assets@main/images/sjgj.jpg" 
-                alt="Samwedna Group" 
-                className="w-4 h-4 rounded-full object-cover shrink-0 border border-white/20"
-              />
-              <span>SAMWEDNA GROUP OF INSTITUTES</span>
-              <span className="hidden md:inline text-[9px] bg-white/20 px-1.5 py-0.2 rounded font-extrabold uppercase">
-                Exam Preparation
-              </span>
+              <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-2xl overflow-hidden bg-white p-1 shadow-sm shrink-0 border-2 border-indigo-300">
+                <img 
+                  src="https://cdn.jsdelivr.net/gh/luckymohittiwari52-oss/quiz-assets@main/images/sjgj.jpg" 
+                  alt="Samwedna Group of Institutes" 
+                  className="w-full h-full object-contain rounded-xl"
+                />
+              </div>
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-base sm:text-lg lg:text-xl font-black tracking-tight leading-tight">
+                    SAMWEDNA GROUP OF INSTITUTES
+                  </span>
+                  <span className={`text-[10px] sm:text-xs px-2 py-0.5 rounded-md font-black uppercase tracking-wider ${portalMode === 'institute' ? 'bg-white text-indigo-950' : 'bg-indigo-500/20 text-indigo-300 border border-indigo-400/30'}`}>
+                    Govt Exam Academy
+                  </span>
+                </div>
+                <span className={`text-xs sm:text-sm block truncate font-medium mt-0.5 ${portalMode === 'institute' ? 'text-indigo-100 font-semibold' : 'text-slate-400'}`}>
+                  Daily Current Affairs, Online CBT Test Series &amp; Free Study Material
+                </span>
+              </div>
             </button>
           </div>
-
-          {/* Quick Admin Access (Strictly for Authorized Admin Accounts) & Helpline */}
-          <div className="flex items-center gap-3">
-            {isAdmin && (
-              <button
-                onClick={() => handleNavClick('admin')}
-                className={`hidden sm:flex items-center gap-1.5 px-2.5 py-0.5 rounded-md text-[11px] font-bold transition-colors cursor-pointer ${
-                  currentView === 'admin'
-                    ? 'bg-cyan-400 text-slate-950'
-                    : 'bg-white/10 hover:bg-white/20 text-cyan-300 border border-cyan-400/30'
-                }`}
-                title="Admin Panel: Upload Quizzes, Daily CA, Free PDFs & Videos"
-              >
-                <Key className="w-3 h-3" />
-                <span>Admin Panel</span>
-              </button>
-            )}
-
-            <span className="hidden lg:inline text-[11px] text-slate-400">
-              Helpline: <strong className="text-white">+91 9792903247</strong>
-            </span>
-          </div>
-
         </div>
       </div>
 
-      {/* 3. Main Navigation Bar */}
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="flex items-center justify-between h-18 gap-4">
+      {/* 3. Main Navigation Bar with Large Wordmark & Icons */}
+      <div className="w-full mx-auto px-4 sm:px-8 border-b border-slate-200 bg-white">
+        <div className="flex items-center justify-between h-20 gap-4">
           
-          {/* Brand Wordmark dependent on active portal */}
+          {/* Brand Wordmark dependent on active portal - Enlarged & Covering Header */}
           <div className="flex items-center gap-3 shrink-0">
             {portalMode === 'booksboon' ? (
               <button 
                 onClick={() => handleNavClick('product')}
-                className="flex items-center gap-3 text-left group cursor-pointer"
+                className="flex items-center gap-3.5 text-left group cursor-pointer"
               >
-                <div className="w-11 h-11 rounded-xl overflow-hidden bg-white border border-amber-300/80 shadow-md shadow-amber-500/10 flex items-center justify-center p-0.5 group-hover:scale-105 transition-transform shrink-0">
+                <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-2xl overflow-hidden bg-white border-2 border-amber-400/90 shadow-md shadow-amber-500/10 flex items-center justify-center p-1 group-hover:scale-105 transition-transform shrink-0">
                   <img 
                     src="https://cdn.jsdelivr.net/gh/luckymohittiwari52-oss/quiz-assets@main/images/bokbon.jpg" 
                     alt="BooksBoon Official Logo" 
-                    className="w-full h-full object-contain rounded-lg"
+                    className="w-full h-full object-contain rounded-xl"
                   />
                 </div>
                 <div>
-                  <div className="flex items-center gap-1.5">
-                    <span className="text-xl font-black tracking-tight text-slate-900 font-display block leading-tight">
+                  <div className="flex items-center gap-2">
+                    <span className="text-2xl sm:text-3xl font-black tracking-tight text-slate-900 font-display block leading-none">
                       BOOKSBOON
                     </span>
-                    <span className="text-[10px] font-bold bg-amber-100 text-amber-800 px-1 rounded">
+                    <span className="text-xs font-black bg-amber-400 text-slate-950 px-1.5 py-0.5 rounded shadow-xs">
                       .COM
                     </span>
                   </div>
-                  <span className="text-[10px] font-semibold text-rose-600 tracking-wider uppercase block">
-                    Hard Copies & Magazines Store
+                  <span className="text-xs font-bold text-rose-600 tracking-wider uppercase block mt-1">
+                    Hard Copies &amp; Magazines National Store
                   </span>
                 </div>
               </button>
             ) : (
               <button 
                 onClick={() => handleNavClick('home')}
-                className="flex items-center gap-3 text-left group cursor-pointer"
+                className="flex items-center gap-3.5 text-left group cursor-pointer"
               >
-                <div className="w-11 h-11 rounded-xl overflow-hidden bg-white border border-indigo-300/80 shadow-md shadow-indigo-500/10 flex items-center justify-center p-0.5 group-hover:scale-105 transition-transform shrink-0">
+                <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-2xl overflow-hidden bg-white border-2 border-indigo-400/90 shadow-md shadow-indigo-500/10 flex items-center justify-center p-1 group-hover:scale-105 transition-transform shrink-0">
                   <img 
                     src="https://cdn.jsdelivr.net/gh/luckymohittiwari52-oss/quiz-assets@main/images/sjgj.jpg" 
                     alt="Samwedna Group of Institutes Official Logo" 
-                    className="w-full h-full object-contain rounded-lg"
+                    className="w-full h-full object-contain rounded-xl"
                   />
                 </div>
                 <div>
-                  <span className="text-xl font-black tracking-tight text-slate-900 font-display block leading-tight">
+                  <span className="text-2xl sm:text-3xl font-black tracking-tight text-slate-900 font-display block leading-none">
                     SAMWEDNA
                   </span>
-                  <span className="text-[10px] font-bold text-indigo-600 tracking-wider uppercase block">
-                    GROUP OF INSTITUTES
+                  <span className="text-xs font-bold text-indigo-600 tracking-wider uppercase block mt-1">
+                    GROUP OF INSTITUTES · GOVT EXAM PREPARATION
                   </span>
                 </div>
               </button>

@@ -78,6 +78,8 @@ export const AdminPanelView: React.FC = () => {
     updateStudentDetails,
     freePdfs,
     addFreePdf,
+    deleteFreePdf,
+    setReadingPdf,
     videoLectures,
     addVideoLecture,
     testSeriesList,
@@ -89,6 +91,12 @@ export const AdminPanelView: React.FC = () => {
 
   const [adminPasscode, setAdminPasscode] = useState('');
   const [activeAdminTab, setActiveAdminTab] = useState<'analytics' | 'students' | 'current-affairs' | 'quiz' | 'pdfs' | 'videos' | 'books' | 'supabase'>('analytics');
+
+  // Device file upload states
+  const [pdfFileName, setPdfFileName] = useState('');
+  const [pdfFileLoading, setPdfFileLoading] = useState(false);
+  const [caImageFileName, setCaImageFileName] = useState('');
+  const [bookCoverFileName, setBookCoverFileName] = useState('');
 
   // Supabase Config State
   const initialConfig = getStoredSupabaseConfig();
@@ -115,17 +123,29 @@ export const AdminPanelView: React.FC = () => {
   // Form states for creating content:
   // 1. Quiz / CBT Test
   const [quizTitle, setQuizTitle] = useState('');
+  const [quizHindiTitle, setQuizHindiTitle] = useState('');
   const [quizCategory, setQuizCategory] = useState<ExamCategory>('All SSC Exam');
+  const [quizHindiCategory, setQuizHindiCategory] = useState('');
   const [quizDuration, setQuizDuration] = useState('60');
   const [quizMarks, setQuizMarks] = useState('200');
+  const [quizNegativeMarking, setQuizNegativeMarking] = useState('0.50');
   const [quizDifficulty, setQuizDifficulty] = useState<'Easy' | 'Moderate' | 'Hard' | 'Exam Pattern'>('Exam Pattern');
+  const [quizLanguage, setQuizLanguage] = useState<'Bilingual' | 'Hindi' | 'English'>('Bilingual');
+  const [quizSyllabus, setQuizSyllabus] = useState('General Studies, Current Affairs, Reasoning, Quantitative Aptitude');
+  const [quizHindiSyllabus, setQuizHindiSyllabus] = useState('सामान्य अध्ययन, समसामयिकी, तार्किक क्षमता, संख्यात्मक अभियोग्यता');
   const [quizQText, setQuizQText] = useState('');
+  const [quizHindiQText, setQuizHindiQText] = useState('');
   const [quizOptA, setQuizOptA] = useState('');
+  const [quizHindiOptA, setQuizHindiOptA] = useState('');
   const [quizOptB, setQuizOptB] = useState('');
+  const [quizHindiOptB, setQuizHindiOptB] = useState('');
   const [quizOptC, setQuizOptC] = useState('');
+  const [quizHindiOptC, setQuizHindiOptC] = useState('');
   const [quizOptD, setQuizOptD] = useState('');
+  const [quizHindiOptD, setQuizHindiOptD] = useState('');
   const [quizCorrectIdx, setQuizCorrectIdx] = useState(0);
   const [quizExplanation, setQuizExplanation] = useState('');
+  const [quizHindiExplanation, setQuizHindiExplanation] = useState('');
 
   // 2. Current Affairs & Topic Banner
   const [caTitle, setCaTitle] = useState('');
@@ -133,45 +153,67 @@ export const AdminPanelView: React.FC = () => {
   const [caDate, setCaDate] = useState('14 October 2026');
   const [caCategory, setCaCategory] = useState('Polity & Constitution');
   const [caSummary, setCaSummary] = useState('');
+  const [caHindiSummary, setCaHindiSummary] = useState('');
+  const [caFullContent, setCaFullContent] = useState('');
+  const [caHindiFullContent, setCaHindiFullContent] = useState('');
   const [caKeyPoints, setCaKeyPoints] = useState('');
+  const [caHindiKeyPoints, setCaHindiKeyPoints] = useState('');
   const [caImageUrl, setCaImageUrl] = useState('https://images.unsplash.com/photo-1541872703-74c5e44368f9?auto=format&fit=crop&w=1200&q=80');
   const [editingCaId, setEditingCaId] = useState<string | null>(null);
+  const [caHtmlTab, setCaHtmlTab] = useState<'editor' | 'preview'>('editor');
   const [caMcqQuestion, setCaMcqQuestion] = useState('');
+  const [caMcqHindiQuestion, setCaMcqHindiQuestion] = useState('');
   const [caMcqOpt1, setCaMcqOpt1] = useState('');
+  const [caMcqHindiOpt1, setCaMcqHindiOpt1] = useState('');
   const [caMcqOpt2, setCaMcqOpt2] = useState('');
+  const [caMcqHindiOpt2, setCaMcqHindiOpt2] = useState('');
   const [caMcqOpt3, setCaMcqOpt3] = useState('');
+  const [caMcqHindiOpt3, setCaMcqHindiOpt3] = useState('');
   const [caMcqOpt4, setCaMcqOpt4] = useState('');
+  const [caMcqHindiOpt4, setCaMcqHindiOpt4] = useState('');
   const [caMcqCorrect, setCaMcqCorrect] = useState(0);
   const [caMcqExp, setCaMcqExp] = useState('');
+  const [caMcqHindiExp, setCaMcqHindiExp] = useState('');
 
   // 3. Free PDF
   const [pdfTitle, setPdfTitle] = useState('');
+  const [pdfHindiTitle, setPdfHindiTitle] = useState('');
   const [pdfCategory, setPdfCategory] = useState<ExamCategory>('Teaching & UGC NET');
   const [pdfSubject, setPdfSubject] = useState('');
+  const [pdfHindiSubject, setPdfHindiSubject] = useState('');
   const [pdfSize, setPdfSize] = useState('12.5 MB');
   const [pdfPages, setPdfPages] = useState('84');
   const [pdfUrl, setPdfUrl] = useState('/samples/sample.pdf');
   const [pdfDesc, setPdfDesc] = useState('');
+  const [pdfHindiDesc, setPdfHindiDesc] = useState('');
+  const [pdfLanguage, setPdfLanguage] = useState<'Bilingual' | 'Hindi' | 'English'>('Bilingual');
 
   // 4. Video Lecture
   const [vidTitle, setVidTitle] = useState('');
+  const [vidHindiTitle, setVidHindiTitle] = useState('');
   const [vidSubject, setVidSubject] = useState('');
+  const [vidHindiSubject, setVidHindiSubject] = useState('');
   const [vidInstructor, setVidInstructor] = useState('Samwedna Academic Faculty');
   const [vidDuration, setVidDuration] = useState('1 hr 30 min');
   const [vidExam, setVidExam] = useState('All Competitive Exams');
   const [vidYoutubeId, setVidYoutubeId] = useState('');
   const [vidDesc, setVidDesc] = useState('');
+  const [vidHindiDesc, setVidHindiDesc] = useState('');
 
   // 5. BooksBoon Hard Copy Book/Magazine
   const [bookTitle, setBookTitle] = useState('');
   const [bookHindiTitle, setBookHindiTitle] = useState('');
   const [bookAuthor, setBookAuthor] = useState('');
+  const [bookHindiAuthor, setBookHindiAuthor] = useState('');
   const [bookPrice, setBookPrice] = useState('395');
   const [bookOrigPrice, setBookOrigPrice] = useState('480');
   const [bookCategory, setBookCategory] = useState<ExamCategory>('Teaching & UGC NET');
   const [bookCoverUrl, setBookCoverUrl] = useState('');
   const [bookPages, setBookPages] = useState('450');
   const [bookStock, setBookStock] = useState('150');
+  const [bookDesc, setBookDesc] = useState('Authentic hard copy edition printed with high-grade thermal binding.');
+  const [bookHindiDesc, setBookHindiDesc] = useState('प्रामाणिक मुद्रित संस्करण, उच्च गुणवत्ता थर्मल बाइंडिंग और स्पीड पोस्ट डिलीवरी के साथ।');
+  const [bookLanguage, setBookLanguage] = useState<'Hindi' | 'English' | 'Bilingual'>('Hindi');
 
   // Admin authentication bypass or login
   const handleAdminLogin = (e: React.FormEvent) => {
@@ -211,29 +253,53 @@ export const AdminPanelView: React.FC = () => {
       id: Date.now(),
       section: 'General Section',
       questionText: quizQText || `Sample high-yield question for ${quizTitle}`,
+      hindiQuestionText: quizHindiQText.trim() || undefined,
       options: [quizOptA || 'Option A', quizOptB || 'Option B', quizOptC || 'Option C', quizOptD || 'Option D'],
+      hindiOptions: quizHindiOptA.trim() ? [quizHindiOptA, quizHindiOptB || '', quizHindiOptC || '', quizHindiOptD || ''] : undefined,
       correctIndex: quizCorrectIdx,
-      explanation: quizExplanation || 'Detailed conceptual explanation based on standard exam syllabus.'
+      explanation: quizExplanation || 'Detailed conceptual explanation based on standard exam syllabus.',
+      hindiExplanation: quizHindiExplanation.trim() || undefined
     };
+
+    const syllabusArray = quizSyllabus ? quizSyllabus.split(',').map(s => s.trim()).filter(Boolean) : [quizCategory];
+    const hindiSyllabusArray = quizHindiSyllabus ? quizHindiSyllabus.split(',').map(s => s.trim()).filter(Boolean) : undefined;
 
     const newTest: TestSeriesExam = {
       id: `ts-${Date.now()}`,
       title: quizTitle,
+      hindiTitle: quizHindiTitle.trim() || undefined,
       category: quizCategory,
+      hindiCategory: quizHindiCategory.trim() || undefined,
       totalQuestions: 1,
       durationMinutes: parseInt(quizDuration) || 60,
       totalMarks: parseInt(quizMarks) || 200,
+      negativeMarking: parseFloat(quizNegativeMarking) || 0.50,
       difficulty: quizDifficulty,
+      language: quizLanguage,
       enrolledStudents: 1,
       isFreeDemo: true,
-      syllabusCovered: [quizCategory, 'Full Mock Test Pattern'],
+      syllabusCovered: syllabusArray,
+      hindiSyllabusCovered: hindiSyllabusArray,
       lastUpdated: 'Just now',
       questions: [newQuestion]
     };
 
     addTestSeries(newTest);
+    showToast(`Published CBT Test "${quizTitle}" successfully!`, 'success');
     setQuizTitle('');
+    setQuizHindiTitle('');
     setQuizQText('');
+    setQuizHindiQText('');
+    setQuizOptA('');
+    setQuizHindiOptA('');
+    setQuizOptB('');
+    setQuizHindiOptB('');
+    setQuizOptC('');
+    setQuizHindiOptC('');
+    setQuizOptD('');
+    setQuizHindiOptD('');
+    setQuizExplanation('');
+    setQuizHindiExplanation('');
   };
 
   const handleEditCurrentAffair = (article: CurrentAffairArticle) => {
@@ -243,16 +309,26 @@ export const AdminPanelView: React.FC = () => {
     setCaDate(article.date);
     setCaCategory(article.category);
     setCaSummary(article.summary);
+    setCaHindiSummary(article.hindiSummary || '');
+    setCaFullContent(article.fullContent || article.summary);
+    setCaHindiFullContent(article.hindiFullContent || article.hindiSummary || '');
     setCaKeyPoints(article.keyPoints.join('\n'));
+    setCaHindiKeyPoints((article.hindiKeyPoints || []).join('\n'));
     setCaImageUrl(article.imageUrl || article.bannerImage || '');
     if (article.relatedMcq) {
       setCaMcqQuestion(article.relatedMcq.question);
+      setCaMcqHindiQuestion(article.relatedMcq.hindiQuestion || '');
       setCaMcqOpt1(article.relatedMcq.options[0] || '');
+      setCaMcqHindiOpt1(article.relatedMcq.hindiOptions?.[0] || '');
       setCaMcqOpt2(article.relatedMcq.options[1] || '');
+      setCaMcqHindiOpt2(article.relatedMcq.hindiOptions?.[1] || '');
       setCaMcqOpt3(article.relatedMcq.options[2] || '');
+      setCaMcqHindiOpt3(article.relatedMcq.hindiOptions?.[2] || '');
       setCaMcqOpt4(article.relatedMcq.options[3] || '');
+      setCaMcqHindiOpt4(article.relatedMcq.hindiOptions?.[3] || '');
       setCaMcqCorrect(article.relatedMcq.correctIndex);
       setCaMcqExp(article.relatedMcq.explanation);
+      setCaMcqHindiExp(article.relatedMcq.hindiExplanation || '');
     }
     showToast(`Loaded "${article.title}" into editor for updating banner and content`, 'info');
     window.scrollTo({ top: 400, behavior: 'smooth' });
@@ -263,9 +339,24 @@ export const AdminPanelView: React.FC = () => {
     setCaTitle('');
     setCaHindiTitle('');
     setCaSummary('');
+    setCaHindiSummary('');
+    setCaFullContent('');
+    setCaHindiFullContent('');
     setCaKeyPoints('');
+    setCaHindiKeyPoints('');
     setCaImageUrl('https://images.unsplash.com/photo-1541872703-74c5e44368f9?auto=format&fit=crop&w=1200&q=80');
     setCaMcqQuestion('');
+    setCaMcqHindiQuestion('');
+    setCaMcqOpt1('');
+    setCaMcqHindiOpt1('');
+    setCaMcqOpt2('');
+    setCaMcqHindiOpt2('');
+    setCaMcqOpt3('');
+    setCaMcqHindiOpt3('');
+    setCaMcqOpt4('');
+    setCaMcqHindiOpt4('');
+    setCaMcqExp('');
+    setCaMcqHindiExp('');
   };
 
   const handleCreateCurrentAffair = (e: React.FormEvent) => {
@@ -276,6 +367,11 @@ export const AdminPanelView: React.FC = () => {
     }
 
     const keyPointsArray = caKeyPoints
+      .split('\n')
+      .map(s => s.trim())
+      .filter(Boolean);
+
+    const hindiKeyPointsArray = caHindiKeyPoints
       .split('\n')
       .map(s => s.trim())
       .filter(Boolean);
@@ -291,31 +387,55 @@ export const AdminPanelView: React.FC = () => {
       tags: [caCategory, 'Daily Update', 'Exam Preparation'],
       readTime: '4 min read',
       summary: caSummary.trim(),
+      hindiSummary: caHindiSummary.trim() || undefined,
       keyPoints: keyPointsArray.length > 0 ? keyPointsArray : ['Key exam takeaway on policy, institutions and governance.'],
-      fullContent: caSummary.trim(),
+      hindiKeyPoints: hindiKeyPointsArray.length > 0 ? hindiKeyPointsArray : undefined,
+      fullContent: caFullContent.trim() || caSummary.trim(),
+      hindiFullContent: caHindiFullContent.trim() || caHindiSummary.trim() || undefined,
+      isHtmlFormatted: true,
       imageUrl: banner,
       bannerImage: banner,
-      relatedMcq: caMcqQuestion ? {
-        question: caMcqQuestion,
+      relatedMcq: caMcqQuestion.trim() ? {
+        question: caMcqQuestion.trim(),
+        hindiQuestion: caMcqHindiQuestion.trim() || undefined,
         options: [caMcqOpt1 || 'Option A', caMcqOpt2 || 'Option B', caMcqOpt3 || 'Option C', caMcqOpt4 || 'Option D'],
+        hindiOptions: caMcqHindiOpt1.trim() ? [caMcqHindiOpt1, caMcqHindiOpt2 || '', caMcqHindiOpt3 || '', caMcqHindiOpt4 || ''] : undefined,
         correctIndex: caMcqCorrect,
-        explanation: caMcqExp || 'Official solution explanation.'
+        explanation: caMcqExp || 'Official solution explanation.',
+        hindiExplanation: caMcqHindiExp.trim() || undefined
       } : undefined
     };
 
     if (editingCaId) {
       updateCurrentAffair(articleData);
       setEditingCaId(null);
+      showToast('Updated Current Affairs article and banner!', 'success');
     } else {
       addCurrentAffair(articleData);
+      showToast('Published Daily Current Affairs article!', 'success');
     }
 
     setCaTitle('');
     setCaHindiTitle('');
     setCaSummary('');
+    setCaHindiSummary('');
+    setCaFullContent('');
+    setCaHindiFullContent('');
     setCaKeyPoints('');
+    setCaHindiKeyPoints('');
     setCaImageUrl('https://images.unsplash.com/photo-1541872703-74c5e44368f9?auto=format&fit=crop&w=1200&q=80');
     setCaMcqQuestion('');
+    setCaMcqHindiQuestion('');
+    setCaMcqOpt1('');
+    setCaMcqHindiOpt1('');
+    setCaMcqOpt2('');
+    setCaMcqHindiOpt2('');
+    setCaMcqOpt3('');
+    setCaMcqHindiOpt3('');
+    setCaMcqOpt4('');
+    setCaMcqHindiOpt4('');
+    setCaMcqExp('');
+    setCaMcqHindiExp('');
   };
 
   const handleOpenEditStudent = (student: UserProfile) => {
@@ -379,6 +499,78 @@ export const AdminPanelView: React.FC = () => {
     showToast('Students roster CSV exported successfully!', 'success');
   };
 
+  const handlePdfFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (!file.name.toLowerCase().endsWith('.pdf') && file.type !== 'application/pdf') {
+      showToast('Please select a valid PDF file (.pdf)', 'error');
+      return;
+    }
+
+    setPdfFileLoading(true);
+    const sizeInMb = (file.size / (1024 * 1024)).toFixed(1) + ' MB';
+    setPdfSize(sizeInMb);
+    setPdfFileName(file.name);
+    if (!pdfTitle.trim()) {
+      setPdfTitle(file.name.replace(/\.pdf$/i, ''));
+    }
+
+    const reader = new FileReader();
+    reader.onload = () => {
+      if (typeof reader.result === 'string') {
+        setPdfUrl(reader.result);
+        setPdfFileLoading(false);
+        showToast(`PDF "${file.name}" loaded from device (${sizeInMb})`, 'success');
+      }
+    };
+    reader.onerror = () => {
+      setPdfFileLoading(false);
+      showToast('Failed to read PDF file from device', 'error');
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleCaImageFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (!file.type.startsWith('image/')) {
+      showToast('Please select a valid image file', 'error');
+      return;
+    }
+
+    setCaImageFileName(file.name);
+    const reader = new FileReader();
+    reader.onload = () => {
+      if (typeof reader.result === 'string') {
+        setCaImageUrl(reader.result);
+        showToast(`Topic banner "${file.name}" loaded from device`, 'success');
+      }
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleBookCoverFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (!file.type.startsWith('image/')) {
+      showToast('Please select a valid image file', 'error');
+      return;
+    }
+
+    setBookCoverFileName(file.name);
+    const reader = new FileReader();
+    reader.onload = () => {
+      if (typeof reader.result === 'string') {
+        setBookCoverUrl(reader.result);
+        showToast(`Book cover "${file.name}" loaded from device`, 'success');
+      }
+    };
+    reader.readAsDataURL(file);
+  };
+
   const handleCreatePdf = (e: React.FormEvent) => {
     e.preventDefault();
     if (!pdfTitle.trim()) {
@@ -388,21 +580,32 @@ export const AdminPanelView: React.FC = () => {
 
     const newPdf: FreePdfResource = {
       id: `pdf-${Date.now()}`,
-      title: pdfTitle,
+      title: pdfTitle.trim(),
+      hindiTitle: pdfHindiTitle.trim() || undefined,
       category: pdfCategory,
-      subject: pdfSubject || 'General Studies',
+      subject: pdfSubject.trim() || 'General Studies',
+      hindiSubject: pdfHindiSubject.trim() || undefined,
       fileSize: pdfSize,
       pages: parseInt(pdfPages) || 50,
       downloadUrl: pdfUrl || '/samples/sample.pdf',
       downloadsCount: 1,
-      description: pdfDesc || 'Free high-yield exam preparation notes prepared by Samwedna Institute.',
+      description: pdfDesc.trim() || 'Free high-yield exam preparation notes prepared by Samwedna Institute.',
+      hindiDescription: pdfHindiDesc.trim() || undefined,
+      language: pdfLanguage,
       dateAdded: 'Today',
       isTrending: true
     };
 
     addFreePdf(newPdf);
+    showToast(`Published Free PDF "${pdfTitle}"!`, 'success');
     setPdfTitle('');
+    setPdfHindiTitle('');
+    setPdfSubject('');
+    setPdfHindiSubject('');
     setPdfDesc('');
+    setPdfHindiDesc('');
+    setPdfFileName('');
+    setPdfUrl('/samples/sample.pdf');
   };
 
   const handleCreateVideo = (e: React.FormEvent) => {
@@ -414,20 +617,28 @@ export const AdminPanelView: React.FC = () => {
 
     const newVid: VideoLecture = {
       id: `vid-${Date.now()}`,
-      title: vidTitle,
-      subject: vidSubject || 'General Studies',
+      title: vidTitle.trim(),
+      hindiTitle: vidHindiTitle.trim() || undefined,
+      subject: vidSubject.trim() || 'General Studies',
+      hindiSubject: vidHindiSubject.trim() || undefined,
       instructor: vidInstructor,
       duration: vidDuration,
       views: '1.2K views',
       exam: vidExam,
       thumbnailGradient: 'from-blue-900 to-indigo-950',
-      description: vidDesc || 'Comprehensive video lecture with exam notes.',
+      description: vidDesc.trim() || 'Comprehensive video lecture with exam notes.',
+      hindiDescription: vidHindiDesc.trim() || undefined,
       youtubeId: vidYoutubeId || undefined
     };
 
     addVideoLecture(newVid);
+    showToast(`Published Video Lecture "${vidTitle}"!`, 'success');
     setVidTitle('');
+    setVidHindiTitle('');
+    setVidSubject('');
+    setVidHindiSubject('');
     setVidDesc('');
+    setVidHindiDesc('');
   };
 
   const handleCreateBook = (e: React.FormEvent) => {
@@ -439,20 +650,22 @@ export const AdminPanelView: React.FC = () => {
 
     const newBook: Book = {
       id: `book-${Date.now()}`,
-      title: bookTitle,
-      hindiTitle: bookHindiTitle || undefined,
+      title: bookTitle.trim(),
+      hindiTitle: bookHindiTitle.trim() || undefined,
       category: bookCategory,
       subject: 'Exam Special',
-      author: bookAuthor || 'Samwedna Editorial Board',
+      author: bookAuthor.trim() || 'Samwedna Editorial Board',
+      hindiAuthor: bookHindiAuthor.trim() || undefined,
       paperbackPrice: parseInt(bookPrice) || 395,
       originalPrice: parseInt(bookOrigPrice) || 480,
       ebookAvailable: true,
       rating: 4.9,
       reviewsCount: 120,
       pages: parseInt(bookPages) || 350,
-      language: 'Hindi',
+      language: bookLanguage,
       badge: 'New & Upcoming',
-      description: 'Authentic hard copy edition printed with high-grade thermal binding.',
+      description: bookDesc.trim() || 'Authentic hard copy edition printed with high-grade thermal binding.',
+      hindiDescription: bookHindiDesc.trim() || undefined,
       features: ['Genuine hard copy', 'Fast courier delivery via India Post'],
       tableOfContents: ['Chapter 1: Foundations', 'Chapter 2: Solved Papers'],
       samplePdfUrl: '/samples/sample.pdf',
@@ -465,9 +678,13 @@ export const AdminPanelView: React.FC = () => {
     };
 
     addBookToCatalog(newBook);
+    showToast(`Added book "${bookTitle}" to BooksBoon.com!`, 'success');
     setBookTitle('');
     setBookHindiTitle('');
+    setBookAuthor('');
+    setBookHindiAuthor('');
     setBookCoverUrl('');
+    setBookCoverFileName('');
   };
 
   const copySqlSchema = () => {
@@ -581,6 +798,10 @@ CREATE TABLE IF NOT EXISTS free_pdfs (
             <li className="flex items-center gap-2 text-indigo-700 font-semibold">
               <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
               <span>spiindia181069@gmail.com</span>
+            </li>
+            <li className="flex items-center gap-2 text-indigo-700 font-semibold">
+              <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
+              <span>archanashuklashukla58@gmail.com</span>
             </li>
           </ul>
         </div>
@@ -1142,10 +1363,11 @@ CREATE TABLE IF NOT EXISTS free_pdfs (
               )}
             </div>
 
-            <form onSubmit={handleCreateCurrentAffair} className="space-y-4 text-xs">
+            <form onSubmit={handleCreateCurrentAffair} className="space-y-5 text-xs">
+              {/* Title & Date (Bilingual) */}
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                <div className="sm:col-span-2">
-                  <label className="block font-semibold text-slate-700 mb-1">Article Title (English) *</label>
+                <div className="sm:col-span-2 space-y-1">
+                  <label className="block font-semibold text-slate-700">Article Title (English) *</label>
                   <input
                     type="text"
                     required
@@ -1156,8 +1378,8 @@ CREATE TABLE IF NOT EXISTS free_pdfs (
                   />
                 </div>
 
-                <div>
-                  <label className="block font-semibold text-slate-700 mb-1">Date *</label>
+                <div className="space-y-1">
+                  <label className="block font-semibold text-slate-700">Date *</label>
                   <input
                     type="text"
                     required
@@ -1169,20 +1391,21 @@ CREATE TABLE IF NOT EXISTS free_pdfs (
                 </div>
               </div>
 
+              {/* Hindi Title & Category */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div>
-                  <label className="block font-semibold text-slate-700 mb-1">Hindi Title (Optional)</label>
+                <div className="space-y-1">
+                  <label className="block font-semibold text-slate-700">Hindi Title / हिन्दी शीर्षक (Optional)</label>
                   <input
                     type="text"
                     value={caHindiTitle}
                     onChange={(e) => setCaHindiTitle(e.target.value)}
-                    placeholder="e.g. भारत ने गहरे समुद्र मिशन का सफल परीक्षण किया"
-                    className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs focus:ring-2 focus:ring-indigo-500"
+                    placeholder="उदा. भारत ने गहरे समुद्र मिशन 'मत्स्य 6000' का सफल परीक्षण किया"
+                    className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs focus:ring-2 focus:ring-indigo-500 bg-amber-50/20"
                   />
                 </div>
 
-                <div>
-                  <label className="block font-semibold text-slate-700 mb-1">Category</label>
+                <div className="space-y-1">
+                  <label className="block font-semibold text-slate-700">Category</label>
                   <select
                     value={caCategory}
                     onChange={(e) => setCaCategory(e.target.value)}
@@ -1214,9 +1437,29 @@ CREATE TABLE IF NOT EXISTS free_pdfs (
                   required
                   value={caImageUrl}
                   onChange={(e) => setCaImageUrl(e.target.value)}
-                  placeholder="https://images.unsplash.com/..."
+                  placeholder="https://images.unsplash.com/... or upload from device below"
                   className="w-full px-3 py-2 rounded-xl border border-indigo-200 bg-white text-xs font-mono focus:ring-2 focus:ring-indigo-500"
                 />
+
+                {/* Direct Banner Image Upload from Device */}
+                <div className="flex flex-wrap items-center gap-3">
+                  <label className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-xl bg-white border border-indigo-300 text-indigo-700 hover:bg-indigo-50 font-bold text-xs cursor-pointer shadow-2xs transition-colors">
+                    <Upload className="w-3.5 h-3.5" />
+                    <span>Upload Banner Image from Device</span>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      onChange={handleCaImageFileChange}
+                      className="hidden"
+                    />
+                  </label>
+                  {caImageFileName && (
+                    <span className="text-[11px] text-emerald-700 font-semibold truncate max-w-xs flex items-center gap-1">
+                      <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                      <span>{caImageFileName}</span>
+                    </span>
+                  )}
+                </div>
 
                 {/* Quick Presets */}
                 <div>
@@ -1268,69 +1511,307 @@ CREATE TABLE IF NOT EXISTS free_pdfs (
                 )}
               </div>
 
-              <div>
-                <label className="block font-semibold text-slate-700 mb-1">Article Summary & Content *</label>
-                <textarea
-                  required
-                  rows={3}
-                  value={caSummary}
-                  onChange={(e) => setCaSummary(e.target.value)}
-                  placeholder="High-yield summary describing the event and its policy significance..."
-                  className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs focus:ring-2 focus:ring-indigo-500"
-                />
+              {/* Brief Summaries (English & Hindi) */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="space-y-1">
+                  <label className="block font-semibold text-slate-700">Article Summary (English) *</label>
+                  <textarea
+                    required
+                    rows={3}
+                    value={caSummary}
+                    onChange={(e) => setCaSummary(e.target.value)}
+                    placeholder="High-yield 2-3 line summary describing the event..."
+                    className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs focus:ring-2 focus:ring-indigo-500"
+                  />
+                </div>
+
+                <div className="space-y-1">
+                  <label className="block font-semibold text-slate-700">हिन्दी सारांश / Hindi Summary</label>
+                  <textarea
+                    rows={3}
+                    value={caHindiSummary}
+                    onChange={(e) => setCaHindiSummary(e.target.value)}
+                    placeholder="परीक्षा उपयोगी 2-3 पंक्तियों का मुख्य सारांश..."
+                    className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs focus:ring-2 focus:ring-indigo-500 bg-amber-50/20"
+                  />
+                </div>
               </div>
 
-              <div>
-                <label className="block font-semibold text-slate-700 mb-1">Key Takeaways (One per line)</label>
-                <textarea
-                  rows={3}
-                  value={caKeyPoints}
-                  onChange={(e) => setCaKeyPoints(e.target.value)}
-                  placeholder="Nodal agency: NIOT Chennai&#10;Key constitutional article: 341&#10;Exam relevance: UPSC Prelims Paper-I"
-                  className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs focus:ring-2 focus:ring-indigo-500 font-mono"
-                />
-              </div>
-
-              {/* Attached Instant MCQ */}
+              {/* HTML FORMATTED EDITORIAL CONTENT WITH TOOLBAR & LIVE PREVIEW */}
               <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200 space-y-3">
-                <span className="font-bold text-slate-900 block">Attached Retention MCQ Question</span>
-                <input
-                  type="text"
-                  value={caMcqQuestion}
-                  onChange={(e) => setCaMcqQuestion(e.target.value)}
-                  placeholder="Question: Which institute developed this project?"
-                  className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs bg-white"
-                />
+                <div className="flex flex-wrap items-center justify-between gap-2 pb-2 border-b border-slate-200">
+                  <div className="flex items-center gap-2">
+                    <Sparkles className="w-4 h-4 text-indigo-600" />
+                    <span className="font-bold text-slate-900">HTML-Supportive Full Editorial Content</span>
+                    <span className="text-[10px] bg-emerald-100 text-emerald-800 font-bold px-2 py-0.5 rounded-full">
+                      HTML Allowed
+                    </span>
+                  </div>
 
-                <div className="grid grid-cols-2 gap-3">
-                  <input
-                    type="text"
-                    value={caMcqOpt1}
-                    onChange={(e) => setCaMcqOpt1(e.target.value)}
-                    placeholder="Option A"
-                    className="px-3 py-1.5 rounded-lg border border-slate-300 text-xs bg-white"
+                  {/* Mode switcher: Editor vs Preview */}
+                  <div className="flex items-center gap-1 bg-white p-1 rounded-xl border border-slate-200">
+                    <button
+                      type="button"
+                      onClick={() => setCaHtmlTab('editor')}
+                      className={`px-3 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                        caHtmlTab === 'editor' ? 'bg-indigo-600 text-white shadow-2xs' : 'text-slate-600 hover:text-slate-900'
+                      }`}
+                    >
+                      HTML Editor
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setCaHtmlTab('preview')}
+                      className={`px-3 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center gap-1 ${
+                        caHtmlTab === 'preview' ? 'bg-indigo-600 text-white shadow-2xs' : 'text-slate-600 hover:text-slate-900'
+                      }`}
+                    >
+                      <Eye className="w-3.5 h-3.5" />
+                      <span>Live Visual Preview</span>
+                    </button>
+                  </div>
+                </div>
+
+                {caHtmlTab === 'editor' ? (
+                  <div className="space-y-3">
+                    {/* HTML Quick Insertion Toolbar */}
+                    <div className="flex flex-wrap items-center gap-1.5 p-2 bg-white rounded-xl border border-slate-200">
+                      <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider px-1">Insert HTML:</span>
+                      
+                      <button
+                        type="button"
+                        onClick={() => setCaFullContent(prev => prev + ' <b>Bold Key Term</b>')}
+                        className="px-2 py-1 bg-slate-100 hover:bg-slate-200 text-slate-800 rounded font-bold text-[11px] cursor-pointer"
+                        title="Insert Bold tag"
+                      >
+                        &lt;b&gt; Bold
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => setCaFullContent(prev => prev + '\n<h3 class="text-base font-bold text-indigo-900 mt-4 mb-2">Section Subheading</h3>\n')}
+                        className="px-2 py-1 bg-slate-100 hover:bg-slate-200 text-slate-800 rounded font-bold text-[11px] cursor-pointer"
+                        title="Insert Heading tag"
+                      >
+                        &lt;h3&gt; Heading
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => setCaFullContent(prev => prev + '\n<ul class="list-disc pl-5 space-y-1 my-2">\n  <li>Important syllabus point 1</li>\n  <li>Important syllabus point 2</li>\n</ul>\n')}
+                        className="px-2 py-1 bg-slate-100 hover:bg-slate-200 text-slate-800 rounded font-bold text-[11px] cursor-pointer"
+                        title="Insert Bullet list"
+                      >
+                        &lt;ul&gt; Bullet List
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => setCaFullContent(prev => prev + '\n<div class="p-3.5 my-3 rounded-xl bg-amber-50 border-l-4 border-amber-500 text-amber-950 font-medium">\n  <strong>Exam Takeaway:</strong> Add critical prelims fact here.\n</div>\n')}
+                        className="px-2 py-1 bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-200 rounded font-bold text-[11px] cursor-pointer"
+                        title="Insert Highlight Callout Box"
+                      >
+                        Highlight Box
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => setCaFullContent(prev => prev + '\n<table class="w-full text-xs border border-slate-300 my-3">\n  <thead class="bg-slate-100">\n    <tr><th class="p-2 border">Parameter</th><th class="p-2 border">Exam Details</th></tr>\n  </thead>\n  <tbody>\n    <tr><td class="p-2 border font-bold">Nodal Ministry</td><td class="p-2 border">Ministry of Earth Sciences</td></tr>\n    <tr><td class="p-2 border font-bold">Total Outlay</td><td class="p-2 border">₹4,077 Crore</td></tr>\n  </tbody>\n</table>\n')}
+                        className="px-2 py-1 bg-slate-100 hover:bg-slate-200 text-slate-800 rounded font-bold text-[11px] cursor-pointer"
+                        title="Insert HTML Table"
+                      >
+                        &lt;table&gt; Comparison Table
+                      </button>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      <div className="space-y-1">
+                        <label className="block font-semibold text-slate-700">English Full Content (HTML Supported)</label>
+                        <textarea
+                          rows={6}
+                          value={caFullContent}
+                          onChange={(e) => setCaFullContent(e.target.value)}
+                          placeholder="<p>Full editorial analysis with <b>rich HTML tags</b>, headings, tables, and highlighted takeaways...</p>"
+                          className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs font-mono focus:ring-2 focus:ring-indigo-500 bg-white"
+                        />
+                      </div>
+
+                      <div className="space-y-1">
+                        <label className="block font-semibold text-slate-700">हिन्दी पूर्ण सामग्री / Hindi Full Content (HTML Supported)</label>
+                        <textarea
+                          rows={6}
+                          value={caHindiFullContent}
+                          onChange={(e) => setCaHindiFullContent(e.target.value)}
+                          placeholder="<p>हिन्दी में सम्पूर्ण विश्लेषण <b>महत्वपूर्ण तथ्यों</b>, उपशीर्षकों, सूचियों और परीक्षा बिंदुओं के साथ...</p>"
+                          className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs font-mono focus:ring-2 focus:ring-indigo-500 bg-amber-50/20"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="p-4 bg-white rounded-xl border border-slate-200 space-y-4">
+                    <div className="flex items-center justify-between pb-2 border-b border-slate-100 text-[11px] text-slate-500">
+                      <span className="font-bold text-slate-700">Rendered Student Visual View:</span>
+                      <span>Formatted using HTML</span>
+                    </div>
+
+                    <div 
+                      className="prose prose-sm max-w-none text-slate-800 leading-relaxed space-y-2 text-xs sm:text-sm"
+                      dangerouslySetInnerHTML={{ 
+                        __html: caFullContent || caSummary || '<p class="text-slate-400 italic">No content typed yet. Type HTML in the editor tab to see live preview.</p>' 
+                      }}
+                    />
+
+                    {caHindiFullContent && (
+                      <div className="pt-4 border-t border-slate-200 space-y-2">
+                        <span className="text-xs font-bold text-amber-800 block">हिन्दी प्रारूप पूर्वावलोकन (Hindi HTML Preview):</span>
+                        <div 
+                          className="prose prose-sm max-w-none text-slate-800 leading-relaxed text-xs sm:text-sm"
+                          dangerouslySetInnerHTML={{ __html: caHindiFullContent }}
+                        />
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+
+              {/* Key Exam Points (Bilingual) */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="space-y-1">
+                  <label className="block font-semibold text-slate-700">Key Takeaways (English, one per line)</label>
+                  <textarea
+                    rows={3}
+                    value={caKeyPoints}
+                    onChange={(e) => setCaKeyPoints(e.target.value)}
+                    placeholder="Nodal agency: NIOT Chennai&#10;Key constitutional article: 341&#10;Exam relevance: UPSC Prelims Paper-I"
+                    className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs focus:ring-2 focus:ring-indigo-500 font-mono bg-white"
                   />
-                  <input
-                    type="text"
-                    value={caMcqOpt2}
-                    onChange={(e) => setCaMcqOpt2(e.target.value)}
-                    placeholder="Option B"
-                    className="px-3 py-1.5 rounded-lg border border-slate-300 text-xs bg-white"
+                </div>
+
+                <div className="space-y-1">
+                  <label className="block font-semibold text-slate-700">मुख्य परीक्षा बिंदु (हिन्दी, प्रति पंक्ति एक)</label>
+                  <textarea
+                    rows={3}
+                    value={caHindiKeyPoints}
+                    onChange={(e) => setCaHindiKeyPoints(e.target.value)}
+                    placeholder="नोडल एजेंसी: राष्ट्रीय महासागर प्रौद्योगिकी संस्थान चेन्नई&#10;महत्वपूर्ण संवैधानिक अनुच्छेद: 341&#10;परीक्षा उपयोगिता: सिविल सेवा प्रारंभिक परीक्षा"
+                    className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs focus:ring-2 focus:ring-indigo-500 font-mono bg-amber-50/20"
                   />
-                  <input
-                    type="text"
-                    value={caMcqOpt3}
-                    onChange={(e) => setCaMcqOpt3(e.target.value)}
-                    placeholder="Option C"
-                    className="px-3 py-1.5 rounded-lg border border-slate-300 text-xs bg-white"
-                  />
-                  <input
-                    type="text"
-                    value={caMcqOpt4}
-                    onChange={(e) => setCaMcqOpt4(e.target.value)}
-                    placeholder="Option D"
-                    className="px-3 py-1.5 rounded-lg border border-slate-300 text-xs bg-white"
-                  />
+                </div>
+              </div>
+
+              {/* Attached Bilingual Retention MCQ */}
+              <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200 space-y-4">
+                <div className="flex items-center justify-between">
+                  <span className="font-bold text-slate-900 block flex items-center gap-2">
+                    <BookOpen className="w-4 h-4 text-indigo-600" />
+                    <span>Attached Practice MCQ (Bilingual English + Hindi)</span>
+                  </span>
+                  <span className="text-[10px] text-slate-500 bg-white px-2 py-0.5 rounded border border-slate-200">
+                    Instant student self-check
+                  </span>
+                </div>
+
+                {/* Questions */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div className="space-y-1">
+                    <label className="text-[11px] font-semibold text-slate-700">Question (English)</label>
+                    <input
+                      type="text"
+                      value={caMcqQuestion}
+                      onChange={(e) => setCaMcqQuestion(e.target.value)}
+                      placeholder="e.g. Which ministry launched this mission?"
+                      className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs bg-white"
+                    />
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="text-[11px] font-semibold text-slate-700">प्रश्न (हिन्दी / Hindi)</label>
+                    <input
+                      type="text"
+                      value={caMcqHindiQuestion}
+                      onChange={(e) => setCaMcqHindiQuestion(e.target.value)}
+                      placeholder="उदा. किस मंत्रालय ने इस मिशन का शुभारंभ किया?"
+                      className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs bg-amber-50/20"
+                    />
+                  </div>
+                </div>
+
+                {/* Options A, B, C, D Bilingual */}
+                <div className="space-y-2">
+                  <span className="text-[11px] font-bold text-slate-600">Options (English &amp; Hindi):</span>
+                  
+                  {/* Option A */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    <input
+                      type="text"
+                      value={caMcqOpt1}
+                      onChange={(e) => setCaMcqOpt1(e.target.value)}
+                      placeholder="Option A (English)"
+                      className="px-3 py-1.5 rounded-lg border border-slate-300 text-xs bg-white"
+                    />
+                    <input
+                      type="text"
+                      value={caMcqHindiOpt1}
+                      onChange={(e) => setCaMcqHindiOpt1(e.target.value)}
+                      placeholder="विकल्प A (हिन्दी)"
+                      className="px-3 py-1.5 rounded-lg border border-slate-300 text-xs bg-amber-50/20"
+                    />
+                  </div>
+
+                  {/* Option B */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    <input
+                      type="text"
+                      value={caMcqOpt2}
+                      onChange={(e) => setCaMcqOpt2(e.target.value)}
+                      placeholder="Option B (English)"
+                      className="px-3 py-1.5 rounded-lg border border-slate-300 text-xs bg-white"
+                    />
+                    <input
+                      type="text"
+                      value={caMcqHindiOpt2}
+                      onChange={(e) => setCaMcqHindiOpt2(e.target.value)}
+                      placeholder="विकल्प B (हिन्दी)"
+                      className="px-3 py-1.5 rounded-lg border border-slate-300 text-xs bg-amber-50/20"
+                    />
+                  </div>
+
+                  {/* Option C */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    <input
+                      type="text"
+                      value={caMcqOpt3}
+                      onChange={(e) => setCaMcqOpt3(e.target.value)}
+                      placeholder="Option C (English)"
+                      className="px-3 py-1.5 rounded-lg border border-slate-300 text-xs bg-white"
+                    />
+                    <input
+                      type="text"
+                      value={caMcqHindiOpt3}
+                      onChange={(e) => setCaMcqHindiOpt3(e.target.value)}
+                      placeholder="विकल्प C (हिन्दी)"
+                      className="px-3 py-1.5 rounded-lg border border-slate-300 text-xs bg-amber-50/20"
+                    />
+                  </div>
+
+                  {/* Option D */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    <input
+                      type="text"
+                      value={caMcqOpt4}
+                      onChange={(e) => setCaMcqOpt4(e.target.value)}
+                      placeholder="Option D (English)"
+                      className="px-3 py-1.5 rounded-lg border border-slate-300 text-xs bg-white"
+                    />
+                    <input
+                      type="text"
+                      value={caMcqHindiOpt4}
+                      onChange={(e) => setCaMcqHindiOpt4(e.target.value)}
+                      placeholder="विकल्प D (हिन्दी)"
+                      className="px-3 py-1.5 rounded-lg border border-slate-300 text-xs bg-amber-50/20"
+                    />
+                  </div>
                 </div>
 
                 <div className="flex items-center gap-3">
@@ -1338,7 +1819,7 @@ CREATE TABLE IF NOT EXISTS free_pdfs (
                   <select
                     value={caMcqCorrect}
                     onChange={(e) => setCaMcqCorrect(parseInt(e.target.value))}
-                    className="px-3 py-1 rounded-lg border border-slate-300 text-xs bg-white"
+                    className="px-3 py-1 rounded-lg border border-slate-300 text-xs bg-white font-bold text-indigo-700"
                   >
                     <option value={0}>Option A</option>
                     <option value={1}>Option B</option>
@@ -1347,13 +1828,23 @@ CREATE TABLE IF NOT EXISTS free_pdfs (
                   </select>
                 </div>
 
-                <input
-                  type="text"
-                  value={caMcqExp}
-                  onChange={(e) => setCaMcqExp(e.target.value)}
-                  placeholder="Detailed solution explanation..."
-                  className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs bg-white"
-                />
+                {/* Explanations */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <input
+                    type="text"
+                    value={caMcqExp}
+                    onChange={(e) => setCaMcqExp(e.target.value)}
+                    placeholder="Official solution explanation in English..."
+                    className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs bg-white"
+                  />
+                  <input
+                    type="text"
+                    value={caMcqHindiExp}
+                    onChange={(e) => setCaMcqHindiExp(e.target.value)}
+                    placeholder="विस्तृत व्याख्या हिन्दी में..."
+                    className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs bg-amber-50/20"
+                  />
+                </div>
               </div>
 
               <div className="flex items-center gap-3 pt-2">
@@ -1473,9 +1964,10 @@ CREATE TABLE IF NOT EXISTS free_pdfs (
           </div>
 
           <form onSubmit={handleCreateQuiz} className="space-y-4 text-xs">
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-              <div className="sm:col-span-2">
-                <label className="block font-semibold text-slate-700 mb-1">Test Title *</label>
+            {/* Titles Bilingual */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="space-y-1">
+                <label className="block font-semibold text-slate-700">Test Title (English) *</label>
                 <input
                   type="text"
                   required
@@ -1486,8 +1978,22 @@ CREATE TABLE IF NOT EXISTS free_pdfs (
                 />
               </div>
 
-              <div>
-                <label className="block font-semibold text-slate-700 mb-1">Exam Category</label>
+              <div className="space-y-1">
+                <label className="block font-semibold text-slate-700">हिन्दी टेस्ट शीर्षक / Hindi Test Title</label>
+                <input
+                  type="text"
+                  value={quizHindiTitle}
+                  onChange={(e) => setQuizHindiTitle(e.target.value)}
+                  placeholder="उदा. कर्मचारी चयन आयोग संयुक्त स्नातक स्तरीय अखिल भारतीय मॉक टेस्ट #05"
+                  className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs focus:ring-2 focus:ring-indigo-500 bg-amber-50/20"
+                />
+              </div>
+            </div>
+
+            {/* Category, Medium, Difficulty */}
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              <div className="space-y-1">
+                <label className="block font-semibold text-slate-700">Exam Category</label>
                 <select
                   value={quizCategory}
                   onChange={(e) => setQuizCategory(e.target.value as ExamCategory)}
@@ -1499,10 +2005,39 @@ CREATE TABLE IF NOT EXISTS free_pdfs (
                   <option value="All Railway Exam">All Railway Exam</option>
                   <option value="All Bank Exam">All Bank Exam</option>
                   <option value="All State Exam">All State Exam</option>
+                  <option value="All Defence Exam">All Defence Exam</option>
+                </select>
+              </div>
+
+              <div className="space-y-1">
+                <label className="block font-semibold text-slate-700">Test Medium / भाषा</label>
+                <select
+                  value={quizLanguage}
+                  onChange={(e) => setQuizLanguage(e.target.value as 'Bilingual' | 'Hindi' | 'English')}
+                  className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs bg-white font-bold text-indigo-700"
+                >
+                  <option value="Bilingual">द्विभाषी / Bilingual (Hindi + English)</option>
+                  <option value="Hindi">हिन्दी माध्यम / Hindi Medium Only</option>
+                  <option value="English">English Medium Only</option>
+                </select>
+              </div>
+
+              <div className="space-y-1">
+                <label className="block font-semibold text-slate-700">Difficulty Pattern</label>
+                <select
+                  value={quizDifficulty}
+                  onChange={(e) => setQuizDifficulty(e.target.value as typeof quizDifficulty)}
+                  className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs bg-white"
+                >
+                  <option value="Exam Pattern">Official Exam Pattern</option>
+                  <option value="Hard">Advanced / Hard</option>
+                  <option value="Moderate">Moderate High-Yield</option>
+                  <option value="Easy">Foundation / Easy</option>
                 </select>
               </div>
             </div>
 
+            {/* Test Metrics: Duration, Marks, Negative Marking */}
             <div className="grid grid-cols-3 gap-4">
               <div>
                 <label className="block font-semibold text-slate-700 mb-1">Duration (Minutes)</label>
@@ -1523,67 +2058,156 @@ CREATE TABLE IF NOT EXISTS free_pdfs (
                 />
               </div>
               <div>
-                <label className="block font-semibold text-slate-700 mb-1">Difficulty</label>
-                <select
-                  value={quizDifficulty}
-                  onChange={(e) => setQuizDifficulty(e.target.value as typeof quizDifficulty)}
-                  className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs bg-white"
-                >
-                  <option value="Exam Pattern">Exam Pattern</option>
-                  <option value="Hard">Hard</option>
-                  <option value="Moderate">Moderate</option>
-                  <option value="Easy">Easy</option>
-                </select>
+                <label className="block font-semibold text-slate-700 mb-1">Negative Marking (Marks)</label>
+                <input
+                  type="text"
+                  value={quizNegativeMarking}
+                  onChange={(e) => setQuizNegativeMarking(e.target.value)}
+                  placeholder="0.50"
+                  className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs"
+                />
               </div>
             </div>
 
-            <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200 space-y-3">
-              <span className="font-bold text-slate-900 block">Add Test Question</span>
-              <textarea
-                rows={2}
-                value={quizQText}
-                onChange={(e) => setQuizQText(e.target.value)}
-                placeholder="Question text..."
-                className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs bg-white"
-              />
-
-              <div className="grid grid-cols-2 gap-3">
+            {/* Key Syllabus Chips Bilingual */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <label className="block font-semibold text-slate-700 mb-1">Syllabus Covered (English, comma-separated)</label>
                 <input
                   type="text"
-                  value={quizOptA}
-                  onChange={(e) => setQuizOptA(e.target.value)}
-                  placeholder="Option A"
-                  className="px-3 py-1.5 rounded-lg border border-slate-300 text-xs bg-white"
-                />
-                <input
-                  type="text"
-                  value={quizOptB}
-                  onChange={(e) => setQuizOptB(e.target.value)}
-                  placeholder="Option B"
-                  className="px-3 py-1.5 rounded-lg border border-slate-300 text-xs bg-white"
-                />
-                <input
-                  type="text"
-                  value={quizOptC}
-                  onChange={(e) => setQuizOptC(e.target.value)}
-                  placeholder="Option C"
-                  className="px-3 py-1.5 rounded-lg border border-slate-300 text-xs bg-white"
-                />
-                <input
-                  type="text"
-                  value={quizOptD}
-                  onChange={(e) => setQuizOptD(e.target.value)}
-                  placeholder="Option D"
-                  className="px-3 py-1.5 rounded-lg border border-slate-300 text-xs bg-white"
+                  value={quizSyllabus}
+                  onChange={(e) => setQuizSyllabus(e.target.value)}
+                  placeholder="General Studies, Current Affairs, Quantitative Aptitude"
+                  className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs"
                 />
               </div>
+              <div>
+                <label className="block font-semibold text-slate-700 mb-1">पाठ्यक्रम (हिन्दी, अल्पविराम द्वारा अलग)</label>
+                <input
+                  type="text"
+                  value={quizHindiSyllabus}
+                  onChange={(e) => setQuizHindiSyllabus(e.target.value)}
+                  placeholder="सामान्य अध्ययन, समसामयिकी, संख्यात्मक अभियोग्यता"
+                  className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs bg-amber-50/20"
+                />
+              </div>
+            </div>
 
+            {/* Question Builder Bilingual */}
+            <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200 space-y-4">
+              <span className="font-bold text-slate-900 block flex items-center gap-1.5">
+                <Sparkles className="w-4 h-4 text-indigo-600" />
+                <span>Add Simulation Question (Bilingual English + Hindi)</span>
+              </span>
+
+              {/* Question Text */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div className="space-y-1">
+                  <label className="font-semibold text-slate-700">Question Text (English)</label>
+                  <textarea
+                    rows={2}
+                    value={quizQText}
+                    onChange={(e) => setQuizQText(e.target.value)}
+                    placeholder="Type authentic question in English..."
+                    className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs bg-white"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className="font-semibold text-slate-700">प्रश्न (हिन्दी / Hindi)</label>
+                  <textarea
+                    rows={2}
+                    value={quizHindiQText}
+                    onChange={(e) => setQuizHindiQText(e.target.value)}
+                    placeholder="हिन्दी में प्रामाणिक प्रश्न टाइप करें..."
+                    className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs bg-amber-50/20"
+                  />
+                </div>
+              </div>
+
+              {/* Options A, B, C, D */}
+              <div className="space-y-2">
+                <span className="text-[11px] font-bold text-slate-600">Options (English &amp; Hindi):</span>
+                
+                {/* Option A */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  <input
+                    type="text"
+                    value={quizOptA}
+                    onChange={(e) => setQuizOptA(e.target.value)}
+                    placeholder="Option A (English)"
+                    className="px-3 py-1.5 rounded-lg border border-slate-300 text-xs bg-white"
+                  />
+                  <input
+                    type="text"
+                    value={quizHindiOptA}
+                    onChange={(e) => setQuizHindiOptA(e.target.value)}
+                    placeholder="विकल्प A (हिन्दी)"
+                    className="px-3 py-1.5 rounded-lg border border-slate-300 text-xs bg-amber-50/20"
+                  />
+                </div>
+
+                {/* Option B */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  <input
+                    type="text"
+                    value={quizOptB}
+                    onChange={(e) => setQuizOptB(e.target.value)}
+                    placeholder="Option B (English)"
+                    className="px-3 py-1.5 rounded-lg border border-slate-300 text-xs bg-white"
+                  />
+                  <input
+                    type="text"
+                    value={quizHindiOptB}
+                    onChange={(e) => setQuizHindiOptB(e.target.value)}
+                    placeholder="विकल्प B (हिन्दी)"
+                    className="px-3 py-1.5 rounded-lg border border-slate-300 text-xs bg-amber-50/20"
+                  />
+                </div>
+
+                {/* Option C */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  <input
+                    type="text"
+                    value={quizOptC}
+                    onChange={(e) => setQuizOptC(e.target.value)}
+                    placeholder="Option C (English)"
+                    className="px-3 py-1.5 rounded-lg border border-slate-300 text-xs bg-white"
+                  />
+                  <input
+                    type="text"
+                    value={quizHindiOptC}
+                    onChange={(e) => setQuizHindiOptC(e.target.value)}
+                    placeholder="विकल्प C (हिन्दी)"
+                    className="px-3 py-1.5 rounded-lg border border-slate-300 text-xs bg-amber-50/20"
+                  />
+                </div>
+
+                {/* Option D */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  <input
+                    type="text"
+                    value={quizOptD}
+                    onChange={(e) => setQuizOptD(e.target.value)}
+                    placeholder="Option D (English)"
+                    className="px-3 py-1.5 rounded-lg border border-slate-300 text-xs bg-white"
+                  />
+                  <input
+                    type="text"
+                    value={quizHindiOptD}
+                    onChange={(e) => setQuizHindiOptD(e.target.value)}
+                    placeholder="विकल्प D (हिन्दी)"
+                    className="px-3 py-1.5 rounded-lg border border-slate-300 text-xs bg-amber-50/20"
+                  />
+                </div>
+              </div>
+
+              {/* Correct Option */}
               <div className="flex items-center gap-3">
                 <label className="font-semibold text-slate-700">Correct Option:</label>
                 <select
                   value={quizCorrectIdx}
                   onChange={(e) => setQuizCorrectIdx(parseInt(e.target.value))}
-                  className="px-3 py-1 rounded-lg border border-slate-300 text-xs bg-white"
+                  className="px-3 py-1 rounded-lg border border-slate-300 text-xs bg-white font-bold text-indigo-700"
                 >
                   <option value={0}>Option A</option>
                   <option value={1}>Option B</option>
@@ -1592,20 +2216,31 @@ CREATE TABLE IF NOT EXISTS free_pdfs (
                 </select>
               </div>
 
-              <input
-                type="text"
-                value={quizExplanation}
-                onChange={(e) => setQuizExplanation(e.target.value)}
-                placeholder="Explanation of the correct answer..."
-                className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs bg-white"
-              />
+              {/* Explanations */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <input
+                  type="text"
+                  value={quizExplanation}
+                  onChange={(e) => setQuizExplanation(e.target.value)}
+                  placeholder="Official conceptual explanation in English..."
+                  className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs bg-white"
+                />
+                <input
+                  type="text"
+                  value={quizHindiExplanation}
+                  onChange={(e) => setQuizHindiExplanation(e.target.value)}
+                  placeholder="विस्तृत व्याख्या एवं संदर्भ हिन्दी में..."
+                  className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs bg-amber-50/20"
+                />
+              </div>
             </div>
 
             <button
               type="submit"
-              className="px-6 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold cursor-pointer shadow-xs"
+              className="px-6 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold cursor-pointer shadow-xs flex items-center gap-2"
             >
-              Save & Launch CBT Test Series
+              <CheckCircle2 className="w-4 h-4" />
+              <span>Save &amp; Launch CBT Test Series</span>
             </button>
           </form>
         </div>
@@ -1615,26 +2250,41 @@ CREATE TABLE IF NOT EXISTS free_pdfs (
       {activeAdminTab === 'pdfs' && (
         <div className="bg-white rounded-2xl border border-slate-200 p-6 sm:p-8 space-y-6 shadow-sm">
           <div className="pb-4 border-b border-slate-100">
-            <h2 className="text-base font-bold text-slate-900">Upload Free PDF Study Material / E-Book</h2>
-            <p className="text-xs text-slate-500">Add notes, NCERT summaries, or formula books for free student access</p>
+            <h2 className="text-base font-bold text-slate-900">Upload Free PDF Study Material / E-Book (Bilingual)</h2>
+            <p className="text-xs text-slate-500">Add notes, NCERT summaries, or formula books for free student access in Hindi &amp; English</p>
           </div>
 
           <form onSubmit={handleCreatePdf} className="space-y-4 text-xs">
+            {/* Title Bilingual */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div>
-                <label className="block font-semibold text-slate-700 mb-1">PDF Resource Title *</label>
+              <div className="space-y-1">
+                <label className="block font-semibold text-slate-700">PDF Resource Title (English) *</label>
                 <input
                   type="text"
                   required
                   value={pdfTitle}
                   onChange={(e) => setPdfTitle(e.target.value)}
                   placeholder="e.g. Indian Polity 100 Most Expected Articles"
-                  className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs"
+                  className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs focus:ring-2 focus:ring-indigo-500"
                 />
               </div>
 
-              <div>
-                <label className="block font-semibold text-slate-700 mb-1">Exam Category</label>
+              <div className="space-y-1">
+                <label className="block font-semibold text-slate-700">हिन्दी पीडीएफ शीर्षक / Hindi PDF Title</label>
+                <input
+                  type="text"
+                  value={pdfHindiTitle}
+                  onChange={(e) => setPdfHindiTitle(e.target.value)}
+                  placeholder="उदा. भारतीय राजव्यवस्था के 100 महत्वपूर्ण अनुच्छेद एवं सार संग्रह"
+                  className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs focus:ring-2 focus:ring-indigo-500 bg-amber-50/20"
+                />
+              </div>
+            </div>
+
+            {/* Category & Medium */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="space-y-1">
+                <label className="block font-semibold text-slate-700">Exam Category</label>
                 <select
                   value={pdfCategory}
                   onChange={(e) => setPdfCategory(e.target.value as ExamCategory)}
@@ -1645,13 +2295,28 @@ CREATE TABLE IF NOT EXISTS free_pdfs (
                   <option value="All SSC Exam">All SSC Exam</option>
                   <option value="All Railway Exam">All Railway Exam</option>
                   <option value="All Bank Exam">All Bank Exam</option>
+                  <option value="All State Exam">All State Exam</option>
+                </select>
+              </div>
+
+              <div className="space-y-1">
+                <label className="block font-semibold text-slate-700">Medium / भाषा</label>
+                <select
+                  value={pdfLanguage}
+                  onChange={(e) => setPdfLanguage(e.target.value as 'Bilingual' | 'Hindi' | 'English')}
+                  className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs bg-white font-bold text-indigo-700"
+                >
+                  <option value="Bilingual">द्विभाषी / Bilingual (Hindi + English)</option>
+                  <option value="Hindi">हिन्दी माध्यम / Hindi Medium</option>
+                  <option value="English">English Medium</option>
                 </select>
               </div>
             </div>
 
-            <div className="grid grid-cols-3 gap-4">
-              <div>
-                <label className="block font-semibold text-slate-700 mb-1">Subject</label>
+            {/* Subject Bilingual, File Size, Total Pages */}
+            <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
+              <div className="space-y-1">
+                <label className="block font-semibold text-slate-700">Subject (English)</label>
                 <input
                   type="text"
                   value={pdfSubject}
@@ -1661,19 +2326,30 @@ CREATE TABLE IF NOT EXISTS free_pdfs (
                 />
               </div>
 
-              <div>
-                <label className="block font-semibold text-slate-700 mb-1">File Size</label>
+              <div className="space-y-1">
+                <label className="block font-semibold text-slate-700">विषय (हिन्दी)</label>
+                <input
+                  type="text"
+                  value={pdfHindiSubject}
+                  onChange={(e) => setPdfHindiSubject(e.target.value)}
+                  placeholder="उदा. भारतीय संविधान व राजव्यवस्था"
+                  className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs bg-amber-50/20"
+                />
+              </div>
+
+              <div className="space-y-1">
+                <label className="block font-semibold text-slate-700">File Size</label>
                 <input
                   type="text"
                   value={pdfSize}
                   onChange={(e) => setPdfSize(e.target.value)}
                   placeholder="e.g. 14.5 MB"
-                  className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs"
+                  className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs font-mono"
                 />
               </div>
 
-              <div>
-                <label className="block font-semibold text-slate-700 mb-1">Total Pages</label>
+              <div className="space-y-1">
+                <label className="block font-semibold text-slate-700">Total Pages</label>
                 <input
                   type="number"
                   value={pdfPages}
@@ -1684,35 +2360,189 @@ CREATE TABLE IF NOT EXISTS free_pdfs (
               </div>
             </div>
 
+            {/* Direct Device PDF File Picker */}
+            <div className="p-4 bg-indigo-50/70 rounded-2xl border-2 border-dashed border-indigo-200 text-center space-y-2">
+              <div className="flex flex-col items-center justify-center gap-1">
+                <div className="w-10 h-10 rounded-xl bg-indigo-100 text-indigo-700 flex items-center justify-center shadow-2xs">
+                  <Upload className="w-5 h-5" />
+                </div>
+                <span className="font-bold text-slate-900 text-sm">
+                  Upload PDF Document from Device
+                </span>
+                <p className="text-[11px] text-slate-500 max-w-sm">
+                  Select study material, previous year question paper, or formula sheet PDF from your computer or phone.
+                </p>
+              </div>
+
+              <div className="pt-1 flex flex-col sm:flex-row items-center justify-center gap-3">
+                <label className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs cursor-pointer shadow-xs transition-all">
+                  <FileText className="w-4 h-4" />
+                  <span>Choose PDF File</span>
+                  <input
+                    type="file"
+                    accept="application/pdf"
+                    onChange={handlePdfFileChange}
+                    className="hidden"
+                  />
+                </label>
+
+                {pdfFileName && (
+                  <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-semibold">
+                    <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                    <span className="truncate max-w-[220px] font-mono">{pdfFileName}</span>
+                    <span className="text-[10px] text-emerald-600 font-bold">({pdfSize})</span>
+                  </div>
+                )}
+                {pdfFileLoading && (
+                  <span className="text-xs text-indigo-600 animate-pulse font-semibold">Reading PDF...</span>
+                )}
+              </div>
+            </div>
+
             <div>
-              <label className="block font-semibold text-slate-700 mb-1">Download / Sample URL</label>
+              <label className="block font-semibold text-slate-700 mb-1">Download / Sample URL or Data Path</label>
               <input
                 type="text"
                 value={pdfUrl}
                 onChange={(e) => setPdfUrl(e.target.value)}
-                placeholder="/samples/sample.pdf or direct storage link"
+                placeholder="/samples/sample.pdf or direct storage link or uploaded data URL"
                 className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs font-mono"
               />
             </div>
 
-            <div>
-              <label className="block font-semibold text-slate-700 mb-1">Description</label>
-              <textarea
-                rows={2}
-                value={pdfDesc}
-                onChange={(e) => setPdfDesc(e.target.value)}
-                placeholder="High-yield notes for rapid revision before exam..."
-                className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs"
-              />
+            {/* Descriptions Bilingual */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="space-y-1">
+                <label className="block font-semibold text-slate-700">Description (English)</label>
+                <textarea
+                  rows={2}
+                  value={pdfDesc}
+                  onChange={(e) => setPdfDesc(e.target.value)}
+                  placeholder="High-yield notes for rapid revision before exam..."
+                  className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs"
+                />
+              </div>
+
+              <div className="space-y-1">
+                <label className="block font-semibold text-slate-700">हिन्दी विवरण / Hindi Description</label>
+                <textarea
+                  rows={2}
+                  value={pdfHindiDesc}
+                  onChange={(e) => setPdfHindiDesc(e.target.value)}
+                  placeholder="परीक्षा से पहले त्वरित पुनरावृत्ति हेतु प्रामाणिक सामग्री..."
+                  className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs bg-amber-50/20"
+                />
+              </div>
             </div>
 
             <button
               type="submit"
-              className="px-6 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold cursor-pointer shadow-xs"
+              className="px-6 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold cursor-pointer shadow-xs flex items-center gap-2"
             >
-              Upload PDF Resource
+              <CheckCircle2 className="w-4 h-4" />
+              <span>Publish Free PDF Resource</span>
             </button>
           </form>
+
+          {/* Published PDFs & Study Materials List */}
+          <div className="pt-6 border-t border-slate-200 space-y-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <h3 className="text-base font-bold text-slate-900 font-display">
+                  Published Free PDFs &amp; Study Notes ({freePdfs.length})
+                </h3>
+                <p className="text-xs text-slate-500">
+                  Uploaded PDF materials live on the website for all students.
+                </p>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {freePdfs.map((pdf) => (
+                <div
+                  key={pdf.id}
+                  className="p-4 rounded-2xl border border-slate-200 bg-white hover:border-indigo-300 hover:shadow-xs transition-all flex flex-col justify-between gap-3"
+                >
+                  <div className="flex items-start gap-3">
+                    <div className="w-10 h-10 rounded-xl bg-rose-50 border border-rose-200 text-rose-600 flex items-center justify-center shrink-0">
+                      <FileText className="w-5 h-5" />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-2">
+                        <span className="px-2 py-0.5 rounded-md bg-indigo-50 text-indigo-700 text-[10px] font-bold">
+                          {pdf.category}
+                        </span>
+                        <span className="text-[10px] text-slate-400 font-medium">
+                          {pdf.subject}
+                        </span>
+                      </div>
+                      <h4 className="font-bold text-slate-900 text-xs sm:text-sm mt-1 line-clamp-1">
+                        {pdf.title}
+                      </h4>
+                      {pdf.hindiTitle && (
+                        <p className="text-[11px] text-slate-600 font-medium line-clamp-1 italic">
+                          {pdf.hindiTitle}
+                        </p>
+                      )}
+                      <p className="text-slate-500 text-[11px] line-clamp-2 mt-0.5 leading-relaxed">
+                        {pdf.description}
+                      </p>
+                      <div className="flex items-center gap-3 text-[10px] text-slate-400 mt-2 font-mono">
+                        <span>{pdf.fileSize}</span>
+                        <span>•</span>
+                        <span>{pdf.pages} Pages</span>
+                        <span>•</span>
+                        <span>{pdf.downloadsCount} Downloads</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center justify-between pt-2 border-t border-slate-100 text-xs">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setReadingPdf({
+                          title: pdf.title,
+                          url: pdf.downloadUrl,
+                          pages: pdf.pages
+                        });
+                      }}
+                      className="px-3 py-1.5 rounded-lg bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-bold text-xs flex items-center gap-1.5 cursor-pointer transition-colors"
+                    >
+                      <Eye className="w-3.5 h-3.5" />
+                      <span>Preview</span>
+                    </button>
+
+                    <div className="flex items-center gap-2">
+                      <a
+                        href={pdf.downloadUrl}
+                        download={`${pdf.title}.pdf`}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="px-3 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs flex items-center gap-1.5 cursor-pointer transition-colors"
+                      >
+                        <Download className="w-3.5 h-3.5" />
+                        <span>Download</span>
+                      </a>
+
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (confirm(`Delete PDF "${pdf.title}" from website?`)) {
+                            deleteFreePdf(pdf.id);
+                          }
+                        }}
+                        className="p-1.5 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-600 font-bold cursor-pointer transition-colors"
+                        title="Delete PDF"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
         </div>
       )}
 
@@ -1720,14 +2550,15 @@ CREATE TABLE IF NOT EXISTS free_pdfs (
       {activeAdminTab === 'videos' && (
         <div className="bg-white rounded-2xl border border-slate-200 p-6 sm:p-8 space-y-6 shadow-sm">
           <div className="pb-4 border-b border-slate-100">
-            <h2 className="text-base font-bold text-slate-900">Upload Video Lecture Link & Details</h2>
-            <p className="text-xs text-slate-500">Embed YouTube or MP4 video lecture with subject notes</p>
+            <h2 className="text-base font-bold text-slate-900">Upload Video Lecture Link &amp; Details (Bilingual)</h2>
+            <p className="text-xs text-slate-500">Embed YouTube or MP4 video lecture with subject notes in Hindi and English</p>
           </div>
 
           <form onSubmit={handleCreateVideo} className="space-y-4 text-xs">
+            {/* Title Bilingual */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div>
-                <label className="block font-semibold text-slate-700 mb-1">Lecture Title *</label>
+              <div className="space-y-1">
+                <label className="block font-semibold text-slate-700">Lecture Title (English) *</label>
                 <input
                   type="text"
                   required
@@ -1738,14 +2569,39 @@ CREATE TABLE IF NOT EXISTS free_pdfs (
                 />
               </div>
 
-              <div>
-                <label className="block font-semibold text-slate-700 mb-1">Subject</label>
+              <div className="space-y-1">
+                <label className="block font-semibold text-slate-700">हिन्दी वीडियो शीर्षक / Hindi Title</label>
+                <input
+                  type="text"
+                  value={vidHindiTitle}
+                  onChange={(e) => setVidHindiTitle(e.target.value)}
+                  placeholder="उदा. भारतीय संविधान अनुच्छेद 1 से 51A संपूर्ण मास्टरक्लास"
+                  className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs bg-amber-50/20"
+                />
+              </div>
+            </div>
+
+            {/* Subject Bilingual */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="space-y-1">
+                <label className="block font-semibold text-slate-700">Subject (English)</label>
                 <input
                   type="text"
                   value={vidSubject}
                   onChange={(e) => setVidSubject(e.target.value)}
                   placeholder="e.g. Indian Polity"
                   className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs"
+                />
+              </div>
+
+              <div className="space-y-1">
+                <label className="block font-semibold text-slate-700">विषय (हिन्दी / Hindi)</label>
+                <input
+                  type="text"
+                  value={vidHindiSubject}
+                  onChange={(e) => setVidHindiSubject(e.target.value)}
+                  placeholder="उदा. भारतीय राजव्यवस्था"
+                  className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs bg-amber-50/20"
                 />
               </div>
             </div>
@@ -1784,11 +2640,37 @@ CREATE TABLE IF NOT EXISTS free_pdfs (
               </div>
             </div>
 
+            {/* Descriptions Bilingual */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="space-y-1">
+                <label className="block font-semibold text-slate-700">Description (English)</label>
+                <textarea
+                  rows={2}
+                  value={vidDesc}
+                  onChange={(e) => setVidDesc(e.target.value)}
+                  placeholder="Key conceptual notes covered in this lecture..."
+                  className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs"
+                />
+              </div>
+
+              <div className="space-y-1">
+                <label className="block font-semibold text-slate-700">हिन्दी विवरण / Hindi Description</label>
+                <textarea
+                  rows={2}
+                  value={vidHindiDesc}
+                  onChange={(e) => setVidHindiDesc(e.target.value)}
+                  placeholder="इस व्याख्यान में कवर किए गए प्रमुख बिंदु..."
+                  className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs bg-amber-50/20"
+                />
+              </div>
+            </div>
+
             <button
               type="submit"
-              className="px-6 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold cursor-pointer shadow-xs"
+              className="px-6 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold cursor-pointer shadow-xs flex items-center gap-2"
             >
-              Save Video Lecture
+              <CheckCircle2 className="w-4 h-4" />
+              <span>Save Video Lecture</span>
             </button>
           </form>
         </div>
@@ -1798,36 +2680,76 @@ CREATE TABLE IF NOT EXISTS free_pdfs (
       {activeAdminTab === 'books' && (
         <div className="bg-white rounded-2xl border border-slate-200 p-6 sm:p-8 space-y-6 shadow-sm">
           <div className="pb-4 border-b border-slate-100">
-            <h2 className="text-base font-bold text-slate-900">Add Book or Magazine to BooksBoon.com</h2>
-            <p className="text-xs text-slate-500">Publish physical hard copies and magazines with stock count and CDN cover images</p>
+            <h2 className="text-base font-bold text-slate-900">Add Book or Magazine to BooksBoon.com (Bilingual)</h2>
+            <p className="text-xs text-slate-500">Publish physical hard copies and magazines with stock count and CDN cover images in Hindi and English</p>
           </div>
 
           <form onSubmit={handleCreateBook} className="space-y-4 text-xs">
+            {/* Title Bilingual */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div>
-                <label className="block font-semibold text-slate-700 mb-1">Book / Magazine Title *</label>
+              <div className="space-y-1">
+                <label className="block font-semibold text-slate-700">Book / Magazine Title (English) *</label>
                 <input
                   type="text"
                   required
                   value={bookTitle}
                   onChange={(e) => setBookTitle(e.target.value)}
-                  placeholder="e.g. निर्वाचन लोकतंत्र का आधार"
+                  placeholder="e.g. Nirvachan Loktantra Ka Aadhar"
                   className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs"
                 />
               </div>
 
-              <div>
-                <label className="block font-semibold text-slate-700 mb-1">Author / Editor</label>
+              <div className="space-y-1">
+                <label className="block font-semibold text-slate-700">हिन्दी पुस्तक शीर्षक / Hindi Book Title</label>
                 <input
                   type="text"
-                  value={bookAuthor}
-                  onChange={(e) => setBookAuthor(e.target.value)}
-                  placeholder="e.g. अरुण कुमार सिंह"
-                  className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs"
+                  value={bookHindiTitle}
+                  onChange={(e) => setBookHindiTitle(e.target.value)}
+                  placeholder="उदा. निर्वाचन लोकतंत्र का आधार"
+                  className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs bg-amber-50/20"
                 />
               </div>
             </div>
 
+            {/* Author Bilingual & Language */}
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              <div className="space-y-1">
+                <label className="block font-semibold text-slate-700">Author / Editor (English)</label>
+                <input
+                  type="text"
+                  value={bookAuthor}
+                  onChange={(e) => setBookAuthor(e.target.value)}
+                  placeholder="e.g. Arun Kumar Singh"
+                  className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs"
+                />
+              </div>
+
+              <div className="space-y-1">
+                <label className="block font-semibold text-slate-700">लेखक / संपादक (हिन्दी)</label>
+                <input
+                  type="text"
+                  value={bookHindiAuthor}
+                  onChange={(e) => setBookHindiAuthor(e.target.value)}
+                  placeholder="उदा. अरुण कुमार सिंह"
+                  className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs bg-amber-50/20"
+                />
+              </div>
+
+              <div className="space-y-1">
+                <label className="block font-semibold text-slate-700">Book Medium / भाषा</label>
+                <select
+                  value={bookLanguage}
+                  onChange={(e) => setBookLanguage(e.target.value as 'Hindi' | 'English' | 'Bilingual')}
+                  className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs bg-white font-bold text-indigo-700"
+                >
+                  <option value="Hindi">हिन्दी माध्यम / Hindi</option>
+                  <option value="English">English Medium</option>
+                  <option value="Bilingual">द्विभाषी / Bilingual</option>
+                </select>
+              </div>
+            </div>
+
+            {/* Prices & Stock */}
             <div className="grid grid-cols-3 gap-4">
               <div>
                 <label className="block font-semibold text-slate-700 mb-1">Hard Copy Price (₹) *</label>
@@ -1860,15 +2782,58 @@ CREATE TABLE IF NOT EXISTS free_pdfs (
               </div>
             </div>
 
+            {/* Description Bilingual */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="space-y-1">
+                <label className="block font-semibold text-slate-700">Description (English)</label>
+                <textarea
+                  rows={2}
+                  value={bookDesc}
+                  onChange={(e) => setBookDesc(e.target.value)}
+                  className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs"
+                />
+              </div>
+
+              <div className="space-y-1">
+                <label className="block font-semibold text-slate-700">पुस्तक विवरण (हिन्दी / Hindi)</label>
+                <textarea
+                  rows={2}
+                  value={bookHindiDesc}
+                  onChange={(e) => setBookHindiDesc(e.target.value)}
+                  className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs bg-amber-50/20"
+                />
+              </div>
+            </div>
+
             <div>
-              <label className="block font-semibold text-slate-700 mb-1">Cover Image CDN URL</label>
+              <label className="block font-semibold text-slate-700 mb-1">Cover Image CDN URL or Upload Below</label>
               <input
                 type="text"
                 value={bookCoverUrl}
                 onChange={(e) => setBookCoverUrl(e.target.value)}
-                placeholder="https://cdn.jsdelivr.net/gh/luckymohittiwari52-oss/quiz-assets@main/images/..."
+                placeholder="https://cdn.jsdelivr.net/gh/luckymohittiwari52-oss/quiz-assets@main/images/... or upload from device"
                 className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs font-mono"
               />
+            </div>
+
+            {/* Direct Cover Image Upload from Device */}
+            <div className="flex flex-wrap items-center gap-3">
+              <label className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-xl bg-white border border-slate-300 text-slate-700 hover:bg-slate-50 font-bold text-xs cursor-pointer shadow-2xs transition-colors">
+                <Upload className="w-3.5 h-3.5" />
+                <span>Upload Book Cover from Device</span>
+                <input
+                  type="file"
+                  accept="image/*"
+                  onChange={handleBookCoverFileChange}
+                  className="hidden"
+                />
+              </label>
+              {bookCoverFileName && (
+                <span className="text-[11px] text-emerald-700 font-semibold truncate max-w-xs flex items-center gap-1">
+                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                  <span>{bookCoverFileName}</span>
+                </span>
+              )}
             </div>
 
             {bookCoverUrl && (

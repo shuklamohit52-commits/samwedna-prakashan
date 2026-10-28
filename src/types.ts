@@ -43,8 +43,10 @@ export interface CBTQuestion {
   questionText: string;
   hindiQuestionText?: string;
   options: string[];
+  hindiOptions?: string[];
   correctIndex: number;
   explanation: string;
+  hindiExplanation?: string;
 }
 
 export interface TestSeriesExam {
@@ -52,6 +54,7 @@ export interface TestSeriesExam {
   title: string;
   hindiTitle?: string;
   category: ExamCategory;
+  hindiCategory?: string;
   totalQuestions: number;
   durationMinutes: number;
   totalMarks: number;
@@ -60,6 +63,8 @@ export interface TestSeriesExam {
   enrolledStudents: number;
   isFreeDemo: boolean;
   syllabusCovered: string[];
+  hindiSyllabusCovered?: string[];
+  language?: 'Hindi' | 'English' | 'Bilingual';
   lastUpdated: string;
   associatedBookId?: string;
   questions?: CBTQuestion[];
@@ -91,6 +96,7 @@ export interface Book {
   category: ExamCategory;
   subject: string;
   author: string;
+  hindiAuthor?: string;
   paperbackPrice: number;
   originalPrice: number;
   ebookAvailable: boolean;
@@ -100,6 +106,7 @@ export interface Book {
   language: 'Hindi' | 'English' | 'Bilingual';
   badge?: 'Best Seller' | 'New & Upcoming' | 'Discounted' | 'Top Rated';
   description: string;
+  hindiDescription?: string;
   features: string[];
   tableOfContents: string[];
   samplePdfUrl: string;
@@ -170,6 +177,8 @@ export interface UserProfile {
   createdAt?: string;
 }
 
+export type AppLanguage = 'HI' | 'EN' | 'BILINGUAL';
+
 export interface CurrentAffairArticle {
   id: string;
   title: string;
@@ -181,14 +190,20 @@ export interface CurrentAffairArticle {
   summary: string;
   hindiSummary?: string;
   keyPoints: string[];
+  hindiKeyPoints?: string[];
   fullContent: string;
+  hindiFullContent?: string;
+  isHtmlFormatted?: boolean;
   imageUrl?: string;
   bannerImage?: string;
   relatedMcq?: {
     question: string;
+    hindiQuestion?: string;
     options: string[];
+    hindiOptions?: string[];
     correctIndex: number;
     explanation: string;
+    hindiExplanation?: string;
   };
   pdfUrl?: string;
 }
@@ -196,16 +211,20 @@ export interface CurrentAffairArticle {
 export interface FreePdfResource {
   id: string;
   title: string;
+  hindiTitle?: string;
   category: ExamCategory | string;
   subject: string;
+  hindiSubject?: string;
   fileSize: string;
   pages: number;
   downloadUrl: string;
   downloadsCount: number;
   description: string;
+  hindiDescription?: string;
   dateAdded: string;
   isTrending?: boolean;
   previewExcerpt?: string;
+  language?: 'Hindi' | 'English' | 'Bilingual';
   tags?: string[];
 }
 
@@ -229,6 +248,7 @@ export interface VideoLecture {
   title: string;
   hindiTitle?: string;
   subject: string;
+  hindiSubject?: string;
   instructor: string;
   duration: string;
   views: string;
@@ -237,6 +257,7 @@ export interface VideoLecture {
   isUpcoming?: boolean;
   upcomingDate?: string;
   description: string;
+  hindiDescription?: string;
   youtubeId?: string;
   videoUrl?: string;
   pdfNotesUrl?: string;
