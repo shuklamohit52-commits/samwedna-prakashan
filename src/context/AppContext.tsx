@@ -28,6 +28,7 @@ import {
   INITIAL_ORDERS,
   INITIAL_STUDENTS
 } from '../data/mockData';
+import { ExamSubItem, ExamCategoryGroup, getExamById, getStoredExamsData, upsertExam, removeExam } from '../data/examsData';
 import { OrdersService, TestScoresService } from '../services/supabase';
 import { 
   auth, 
@@ -72,6 +73,14 @@ interface AppContextType {
   selectedBook: Book | null;
   setSelectedBook: (book: Book | null) => void;
   
+  // Selected Exam for Dedicated Exam Detail Hub
+  selectedExam: ExamSubItem | null;
+  setSelectedExam: (exam: ExamSubItem | null) => void;
+  selectExamById: (examId: string) => void;
+  examsCategories: ExamCategoryGroup[];
+  addOrUpdateExam: (categoryId: string, exam: ExamSubItem) => void;
+  deleteExamFromState: (examId: string) => void;
+
   // Institute Test Series & CBT
   testSeriesList: TestSeriesExam[];
   addTestSeries: (test: TestSeriesExam) => void;
@@ -82,6 +91,8 @@ interface AppContextType {
 
   // Institute Current Affairs
   currentAffairs: CurrentAffairArticle[];
+  selectedCaArticleId: string | null;
+  setSelectedCaArticleId: (id: string | null) => void;
   addCurrentAffair: (article: CurrentAffairArticle) => void;
   updateCurrentAffair: (article: CurrentAffairArticle) => void;
   deleteCurrentAffair: (id: string) => void;
@@ -165,8 +176,19 @@ const AppContext = createContext<AppContextType | undefined>(undefined);
 
 export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [portalMode, setPortalMode] = useState<PortalMode>('booksboon');
-  const [currentView, setCurrentView] = useState<PageView>('home');
+  const [currentView, setCurrentViewState] = useState<PageView>('home');
   const [accountTab, setAccountTab] = useState<AccountTab>('dashboard');
+
+  const setCurrentView = (view: PageView) => {
+    setCurrentViewState(view);
+    try {
+      window.scrollTo({ top: 0, left: 0, behavior: 'instant' });
+      document.documentElement.scrollTop = 0;
+      document.body.scrollTop = 0;
+    } catch {
+      // ignore
+    }
+  };
   
   // Persisted user: defaults to null (no one is pre-logged in)
   const [user, setUser] = useState<UserProfile | null>(() => {
@@ -362,6 +384,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   });
 
+  const [selectedCaArticleId, setSelectedCaArticleId] = useState<string | null>(null);
+
   const [freePdfs, setFreePdfs] = useState<FreePdfResource[]>(() => {
     try {
       const saved = localStorage.getItem('samwedna_pdfs');
@@ -501,6 +525,40 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const [selectedBook, setSelectedBook] = useState<Book | null>(null);
+  const [examsCategories, setExamsCategories] = useState<ExamCategoryGroup[]>(() => {
+    return getStoredExamsData();
+  });
+
+  const [selectedExam, setSelectedExam] = useState<ExamSubItem | null>(() => {
+    return getExamById('ssc-cgl') || null;
+  });
+
+  const selectExamById = (examId: string) => {
+    const found = getExamById(examId);
+    if (found) {
+      setSelectedExam(found);
+      setCurrentView('exam-detail');
+    }
+  };
+
+  const addOrUpdateExam = (categoryId: string, exam: ExamSubItem) => {
+    const updated = upsertExam(categoryId, exam);
+    setExamsCategories([...updated]);
+    if (selectedExam && selectedExam.id === exam.id) {
+      setSelectedExam(exam);
+    }
+    showToast(`Exam "${exam.name}" updated successfully!`, 'success');
+  };
+
+  const deleteExamFromState = (examId: string) => {
+    const updated = removeExam(examId);
+    setExamsCategories([...updated]);
+    if (selectedExam && selectedExam.id === examId) {
+      setSelectedExam(getExamById('ssc-cgl') || null);
+    }
+    showToast('Exam removed successfully', 'info');
+  };
+
   const [activeTestExam, setActiveTestExam] = useState<TestSeriesExam | null>(null);
   const [readingPdf, setReadingPdf] = useState<{ title: string; url: string; pages: number } | null>(null);
   const [activeVideo, setActiveVideo] = useState<VideoLecture | null>(null);
@@ -1007,6 +1065,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         selectedBook,
         setSelectedBook,
 
+        // Selected Exam for Dedicated Exam Hub
+        selectedExam,
+        setSelectedExam,
+        selectExamById,
+        examsCategories,
+        addOrUpdateExam,
+        deleteExamFromState,
+
         // Test Series & CBT
         testSeriesList,
         addTestSeries,
@@ -1017,6 +1083,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
         // Current Affairs
         currentAffairs,
+        selectedCaArticleId,
+        setSelectedCaArticleId,
         addCurrentAffair,
         updateCurrentAffair,
         deleteCurrentAffair,

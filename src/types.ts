@@ -21,7 +21,9 @@ export type PageView =
   | 'account' 
   | 'student-dashboard'
   | 'cart'
-  | 'admin';
+  | 'admin'
+  | 'exams'
+  | 'exam-detail';
 
 export type AccountTab = 'dashboard' | 'profile' | 'tests' | 'current-affairs' | 'library' | 'orders' | 'payment';
 

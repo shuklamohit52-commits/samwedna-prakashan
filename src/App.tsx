@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { AppProvider, useApp } from './context/AppContext';
 import { Navbar } from './components/Navbar';
 import { Footer } from './components/Footer';
@@ -21,15 +21,28 @@ import { SignInView } from './views/SignInView';
 import { SignUpView } from './views/SignUpView';
 import { HouseOfSamwednaView } from './views/HouseOfSamwednaView';
 import { BlogView } from './views/BlogView';
+import { ExamDetailView } from './views/ExamDetailView';
 import { CheckCircle2, AlertCircle, Info } from 'lucide-react';
 
 const MainLayout: React.FC = () => {
   const { 
     currentView, 
+    selectedExam,
     selectedBook, 
     setSelectedBook, 
     toast 
   } = useApp();
+
+  // Whenever user switches to any other page or view, always start from the top of the page
+  useEffect(() => {
+    window.scrollTo({
+      top: 0,
+      left: 0,
+      behavior: 'instant'
+    });
+    document.documentElement.scrollTop = 0;
+    document.body.scrollTop = 0;
+  }, [currentView, selectedExam?.id]);
 
   return (
     <div className="min-h-screen flex flex-col bg-slate-50 text-slate-900">
@@ -68,6 +81,7 @@ const MainLayout: React.FC = () => {
         {currentView === 'admin' && <AdminPanelView />}
         {currentView === 'signin' && <SignInView />}
         {currentView === 'signup' && <SignUpView />}
+        {(currentView === 'exam-detail' || currentView === 'exams') && <ExamDetailView />}
         {(currentView === 'house-of-samwedna' || currentView === 'house-of-samvedna') && <HouseOfSamwednaView />}
         {currentView === 'blog' && <BlogView />}
       </main>

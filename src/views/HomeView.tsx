@@ -3,7 +3,6 @@ import { useApp } from '../context/AppContext';
 import { 
   Search, 
   ArrowRight, 
-  ChevronLeft, 
   ChevronRight, 
   BookOpen, 
   Star, 
@@ -18,22 +17,27 @@ import {
   Store,
   GraduationCap,
   FileText,
-  Bookmark,
   Truck,
   Video,
   Layers,
   Flame,
-  Check
+  Zap,
+  Briefcase,
+  Landmark,
+  Shield,
+  Train,
+  Crosshair,
+  Calendar
 } from 'lucide-react';
-import { BOOKS_DATA, VIDEO_LECTURES } from '../data/mockData';
-import { ExamCategory, Book } from '../types';
+import { BOOKS_DATA } from '../data/mockData';
+import { EXAMS_CATEGORIES_DATA } from '../data/examsData';
 import { BookImage } from '../components/BookImage';
-import { RedTickerBar } from '../components/RedTickerBar';
+import { ExamLogo } from '../components/ExamLogo';
+import { TopicLogo } from '../components/TopicLogo';
 
 export const HomeView: React.FC = () => {
   const { 
     setCurrentView, 
-    setPortalMode,
     setSelectedBook, 
     setActiveTestExam, 
     addToCart, 
@@ -41,43 +45,45 @@ export const HomeView: React.FC = () => {
     setSearchQuery, 
     setFilterCategory,
     currentAffairs,
+    setSelectedCaArticleId,
     freePdfs,
-    testSeriesList
+    testSeriesList,
+    selectExamById,
+    appLanguage,
+    examsCategories
   } = useApp();
 
   const [currentSlide, setCurrentSlide] = useState(0);
-  const [activeCategoryTab, setActiveCategoryTab] = useState<'booksboon' | 'institute'>('booksboon');
 
-  // Hero slideshow focusing strictly on BooksBoon & Samwedna Institute (NO coaching)
   const heroSlides = [
     {
-      badge: 'BooksBoon.com Store',
-      title: 'Order Hard Copy Textbooks & Magazines',
-      subheading: 'Official online bookstore for original physical copies. Dispatched in waterproof packaging with door-step delivery via India Post & Bluedart. Powered by Razorpay.',
-      accent: 'Door-Step Delivery across all PIN codes in India',
-      ctaText: 'Shop Hard Copies on BooksBoon',
+      badge: 'Official Bookstore · BooksBoon.com',
+      title: 'BooksBoon Hard Copies & Publications',
+      subheading: 'Authentic printed textbooks, Hindi Sahitya 2500+ MCQs, General Studies volumes, and monthly examination magazines delivered directly to your doorstep across India. Powered by Razorpay.',
+      accent: 'Doorstep Courier Delivery Across India',
+      ctaText: 'Shop Books & Publications',
       ctaAction: () => {
-        setPortalMode('booksboon');
+        setFilterCategory('All');
         setCurrentView('product');
       },
-      secondaryText: 'View Cart & Checkout',
-      secondaryAction: () => setCurrentView('cart'),
+      secondaryText: 'Explore All Exams Hub',
+      secondaryAction: () => {
+        selectExamById('ssc-cgl');
+      },
       gradient: 'from-slate-950 via-amber-950/60 to-slate-900',
-      badgeColor: 'bg-amber-500/20 text-amber-300 border-amber-400/30'
+      badgeColor: 'bg-amber-400 text-slate-950'
     },
     {
-      badge: 'Samwedna Group of Institutes',
-      title: 'Complete Solution for Student Exam Preparation',
-      subheading: 'Daily bilingual Current Affairs, Real CBT Mock Test Series, Free PDF study material capsules, Concept Mindmaps, and Faculty Video Lectures.',
-      accent: 'Bilingual (Hindi & English) Study Ecosystem',
-      ctaText: 'Access Student Prep Portal',
+      badge: 'National Examination Hub 2026',
+      title: 'Target Your Dream Govt Exam',
+      subheading: 'Access complete syllabus breakdown, NTA/TCS-iON CBT mock tests, BooksBoon reference publications, daily current affairs capsules, and free PDF study sheets.',
+      accent: 'Covering SSC, Banking, Teaching, Railways, UPSC & State Exams',
+      ctaText: 'Browse 50+ Examinations',
       ctaAction: () => {
-        setPortalMode('institute');
-        setCurrentView('current-affairs');
+        selectExamById('sbi-clerk');
       },
-      secondaryText: 'Try Real Exam CBT Demo',
+      secondaryText: 'Try Free CBT Mock Test',
       secondaryAction: () => {
-        setPortalMode('institute');
         if (testSeriesList.length > 0) {
           setActiveTestExam(testSeriesList[0]);
         } else {
@@ -85,13 +91,13 @@ export const HomeView: React.FC = () => {
         }
       },
       gradient: 'from-slate-950 via-indigo-950 to-slate-900',
-      badgeColor: 'bg-indigo-500/20 text-indigo-300 border-indigo-400/30'
+      badgeColor: 'bg-indigo-600 text-white'
     },
     {
-      badge: 'Bestseller Hard Copy',
+      badge: 'National Bestseller',
       title: 'हिन्दी साहित्य का इतिहास (2500+ MCQs)',
-      subheading: 'डॉ. रजनीश कुमार यादव (सहायक प्रोफेसर, हिन्दी - JNU/BHU) कृत परिमार्जित एवं संशोधित द्वितीय संस्करण। UGC NET, BPSC TRE, TGT/PGT हेतु सर्वाधिक लोकप्रिय प्रमाणिक ग्रंथ।',
-      accent: 'Hard Copy Paperback in Stock for Immediate Dispatch',
+      subheading: 'डॉ. रजनीश कुमार यादव (सहायक प्रोफेसर, हिन्दी - JNU/BHU) कृत संशोधित द्वितीय संस्करण। UGC NET, BPSC TRE, UP TGT/PGT हेतु सर्वाधिक अनुशंसित ग्रंथ।',
+      accent: 'Paperback In Stock for Immediate Dispatch',
       ctaText: 'Order Hard Copy (₹395)',
       ctaAction: () => {
         const book = BOOKS_DATA.find(b => b.id === 'hindi-sahitya-itihas-rajneesh') || BOOKS_DATA[0];
@@ -104,15 +110,15 @@ export const HomeView: React.FC = () => {
         setSelectedBook(book);
       },
       gradient: 'from-stone-950 via-red-950/70 to-slate-950',
-      badgeColor: 'bg-rose-500/20 text-rose-300 border-rose-400/30'
+      badgeColor: 'bg-rose-600 text-white'
     }
   ];
 
-  // Auto-play hero slider
+  // Auto-slide
   useEffect(() => {
     const timer = setInterval(() => {
       setCurrentSlide(prev => (prev + 1) % heroSlides.length);
-    }, 6500);
+    }, 6000);
     return () => clearInterval(timer);
   }, [heroSlides.length]);
 
@@ -124,6 +130,29 @@ export const HomeView: React.FC = () => {
     }
   };
 
+  const getCategoryIcon = (id: string) => {
+    switch (id) {
+      case 'ssc':
+        return <Briefcase className="w-5 h-5 text-blue-600" />;
+      case 'banking':
+        return <Landmark className="w-5 h-5 text-sky-600" />;
+      case 'teaching':
+        return <GraduationCap className="w-5 h-5 text-amber-600" />;
+      case 'civil-services':
+        return <Shield className="w-5 h-5 text-emerald-600" />;
+      case 'railways':
+        return <Train className="w-5 h-5 text-rose-600" />;
+      case 'defence':
+        return <Crosshair className="w-5 h-5 text-zinc-700" />;
+      case 'police':
+        return <Award className="w-5 h-5 text-yellow-600" />;
+      default:
+        return <GraduationCap className="w-5 h-5 text-indigo-600" />;
+    }
+  };
+
+  const isHindi = appLanguage === 'HI';
+
   return (
     <div className="space-y-16 pb-16">
       
@@ -133,14 +162,14 @@ export const HomeView: React.FC = () => {
           <div className="absolute inset-0 bg-radial from-indigo-500/10 via-transparent to-transparent opacity-50" />
         </div>
 
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16 relative z-10 w-full">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-14 sm:py-16 relative z-10 w-full">
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-10 items-center">
             
             {/* Left Slide Copy */}
             <div className="lg:col-span-7 space-y-6">
               
-              <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-bold border backdrop-blur-md">
-                <span className={`px-2 py-0.5 rounded-full text-[10px] font-extrabold uppercase border ${heroSlides[currentSlide].badgeColor}`}>
+              <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-bold border border-white/10 backdrop-blur-md bg-white/5">
+                <span className={`px-2 py-0.5 rounded-full text-[10px] font-black uppercase ${heroSlides[currentSlide].badgeColor}`}>
                   {heroSlides[currentSlide].badge}
                 </span>
                 <span className="text-slate-300 text-xs hidden sm:inline">
@@ -160,7 +189,7 @@ export const HomeView: React.FC = () => {
               <div className="flex flex-wrap items-center gap-4 pt-2">
                 <button
                   onClick={heroSlides[currentSlide].ctaAction}
-                  className="px-6 py-3.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-extrabold text-xs uppercase tracking-wider shadow-lg shadow-amber-500/20 transition-all flex items-center gap-2 cursor-pointer transform hover:-translate-y-0.5"
+                  className="px-6 py-3.5 rounded-xl bg-amber-400 hover:bg-amber-300 text-slate-950 font-black text-xs uppercase tracking-wider shadow-lg shadow-amber-400/20 transition-all flex items-center gap-2 cursor-pointer transform hover:-translate-y-0.5"
                 >
                   <span>{heroSlides[currentSlide].ctaText}</span>
                   <ArrowRight className="w-4 h-4" />
@@ -175,7 +204,7 @@ export const HomeView: React.FC = () => {
               </div>
 
               {/* Slide Indicators */}
-              <div className="flex items-center gap-2 pt-4">
+              <div className="flex items-center gap-2 pt-2">
                 {heroSlides.map((_, idx) => (
                   <button
                     key={idx}
@@ -192,7 +221,7 @@ export const HomeView: React.FC = () => {
 
             {/* Right Interactive Highlights Card */}
             <div className="lg:col-span-5">
-              <div className="bg-gradient-to-br from-slate-900/90 to-indigo-950/80 backdrop-blur-xl rounded-3xl p-6 sm:p-7 border border-white/10 shadow-2xl space-y-5">
+              <div className="bg-gradient-to-br from-slate-900/95 to-indigo-950/90 backdrop-blur-xl rounded-3xl p-6 sm:p-7 border border-white/10 shadow-2xl space-y-5">
                 
                 <div className="flex items-center justify-between pb-3 border-b border-white/10">
                   <div className="flex items-center gap-2">
@@ -202,13 +231,13 @@ export const HomeView: React.FC = () => {
                     </span>
                   </div>
                   <span className="text-[10px] text-emerald-400 font-bold bg-emerald-500/20 px-2 py-0.5 rounded-full border border-emerald-400/30">
-                    In Physical Stock
+                    Physical Stock Ready
                   </span>
                 </div>
 
                 {/* Highlight Real Book */}
                 {BOOKS_DATA[0] && (
-                  <div className="flex items-center gap-4 bg-white/5 p-3 rounded-2xl border border-white/10">
+                  <div className="flex items-center gap-4 bg-white/5 p-3.5 rounded-2xl border border-white/10">
                     <div className="w-16 h-22 rounded-xl overflow-hidden shrink-0 shadow-md">
                       <BookImage book={BOOKS_DATA[0]} className="w-full h-full object-cover" />
                     </div>
@@ -232,7 +261,7 @@ export const HomeView: React.FC = () => {
                             addToCart(BOOKS_DATA[0], 'Paperback');
                             setCurrentView('checkout');
                           }}
-                          className="px-3 py-1 rounded-lg bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-[11px] cursor-pointer shadow-xs"
+                          className="px-3 py-1 rounded-lg bg-amber-400 hover:bg-amber-300 text-slate-950 font-black text-[11px] cursor-pointer shadow-xs"
                         >
                           Buy Hard Copy
                         </button>
@@ -247,7 +276,7 @@ export const HomeView: React.FC = () => {
                     type="text"
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
-                    placeholder="Search books, author, ISBN, or exam..."
+                    placeholder="Search books, exams, authors, or PDFs..."
                     className="w-full pl-9 pr-4 py-2.5 rounded-xl bg-white/10 border border-white/15 text-xs text-white placeholder-slate-400 focus:outline-hidden focus:ring-2 focus:ring-amber-400"
                   />
                   <Search className="w-4 h-4 text-slate-400 absolute left-3 top-3" />
@@ -257,11 +286,11 @@ export const HomeView: React.FC = () => {
                 <div className="grid grid-cols-2 gap-2 text-[11px] text-slate-300 pt-2 border-t border-white/10">
                   <div className="flex items-center gap-1.5">
                     <Truck className="w-3.5 h-3.5 text-amber-400" />
-                    <span>Free Shipping &gt; ₹499</span>
+                    <span>Courier All Over India</span>
                   </div>
                   <div className="flex items-center gap-1.5">
                     <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
-                    <span>Razorpay Secure Checkout</span>
+                    <span>Live Razorpay Integration</span>
                   </div>
                 </div>
 
@@ -272,359 +301,401 @@ export const HomeView: React.FC = () => {
         </div>
       </section>
 
-      {/* 2. The Two Main Pillars Segmented Showcase */}
-      <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-8">
-        
-        <div className="text-center space-y-3">
-          <span className="text-xs font-extrabold uppercase tracking-widest text-indigo-600 block">
-            Integrated Platform Architecture
-          </span>
-          <h2 className="text-3xl sm:text-4xl font-black text-slate-900 font-display">
-            Two Pillars. One Complete Solution.
-          </h2>
-          <p className="text-sm text-slate-600 max-w-2xl mx-auto">
-            Choose between our dedicated physical bookstore at BooksBoon.com or access complete student exam preparation at Samwedna Group of Institutes.
-          </p>
-
-          {/* Pillar Switcher Buttons */}
-          <div className="inline-flex p-1.5 rounded-2xl bg-slate-100 border border-slate-200 mt-2">
-            <button
-              onClick={() => setActiveCategoryTab('booksboon')}
-              className={`flex items-center gap-2 px-6 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
-                activeCategoryTab === 'booksboon'
-                  ? 'bg-amber-500 text-slate-950 shadow-md'
-                  : 'text-slate-600 hover:text-slate-900'
-              }`}
-            >
-              <Store className="w-4 h-4" />
-              <span>Category 1: BooksBoon.com (Store)</span>
-            </button>
-
-            <button
-              onClick={() => setActiveCategoryTab('institute')}
-              className={`flex items-center gap-2 px-6 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
-                activeCategoryTab === 'institute'
-                  ? 'bg-indigo-600 text-white shadow-md'
-                  : 'text-slate-600 hover:text-slate-900'
-              }`}
-            >
-              <GraduationCap className="w-4 h-4" />
-              <span>Category 2: Samwedna Group of Institutes</span>
-            </button>
+      {/* 2. EXAMS HUB SECTION (MATCHING SCREENSHOT INSTRUCTION) */}
+      <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-6">
+        <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4 pb-4 border-b border-slate-200">
+          <div>
+            <div className="flex items-center gap-2">
+              <span className="px-2.5 py-0.5 rounded-md bg-indigo-50 text-indigo-700 text-xs font-black uppercase tracking-wider">
+                Exams Mega Directory
+              </span>
+              <span className="text-xs text-slate-500 font-medium">50+ Target Examinations</span>
+            </div>
+            <h2 className="text-2xl sm:text-3xl font-black text-slate-900 font-display mt-1">
+              Select Your Target Examination
+            </h2>
+            <p className="text-xs sm:text-sm text-slate-600 mt-1">
+              Click any exam to open its dedicated hub with complete syllabus, BooksBoon publications, CBT mock tests, and free study materials.
+            </p>
           </div>
+
+          <button
+            onClick={() => selectExamById('ssc-cgl')}
+            className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold transition-all shadow-xs shrink-0 cursor-pointer"
+          >
+            <span>Open Exams Hub</span>
+            <ArrowRight className="w-4 h-4" />
+          </button>
         </div>
 
-        {/* PILLAR 1: BOOKSBOON.COM SHOWCASE */}
-        {activeCategoryTab === 'booksboon' && (
-          <div className="bg-gradient-to-br from-amber-50/50 via-white to-orange-50/30 rounded-3xl border border-amber-200/80 p-8 sm:p-10 shadow-sm space-y-8 animate-fadeIn">
-            
-            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-6 border-b border-amber-200/60">
-              <div className="space-y-2">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-xl overflow-hidden bg-white border border-amber-300 p-0.5 shadow-xs shrink-0">
-                    <img 
-                      src="https://cdn.jsdelivr.net/gh/luckymohittiwari52-oss/quiz-assets@main/images/bokbon.jpg" 
-                      alt="BooksBoon" 
-                      className="w-full h-full object-contain"
-                    />
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <span className="px-2.5 py-0.5 rounded-full bg-amber-500 text-slate-950 text-xs font-black">
-                      booksboon.com
+        {/* High-Tech Categories Cards with HD Gradient Borders */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5">
+          {(examsCategories && examsCategories.length > 0 ? examsCategories : EXAMS_CATEGORIES_DATA).map((cat) => (
+            <div 
+              key={cat.id}
+              className="p-[1.5px] rounded-3xl bg-gradient-to-r from-blue-600/30 via-indigo-600/40 to-purple-600/30 hover:from-blue-600 hover:via-indigo-600 hover:to-purple-600 shadow-md hover:shadow-2xl hover:shadow-indigo-500/25 transition-all duration-300 transform hover:-translate-y-1 group"
+            >
+              <div className="bg-white group-hover:bg-indigo-50/20 p-5 rounded-[22.5px] h-full flex flex-col justify-between transition-colors">
+                <div>
+                  <div className="flex items-center justify-between mb-3">
+                    <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-200/80 group-hover:bg-white shadow-2xs transition-colors">
+                      {getCategoryIcon(cat.id)}
+                    </div>
+                    <span className="text-[10px] font-black text-indigo-700 bg-indigo-50 border border-indigo-200/60 px-2.5 py-0.5 rounded-full uppercase tracking-wider">
+                      {cat.exams.length} Exams Listed
                     </span>
-                    <span className="text-xs font-bold text-amber-800">Hard Copies & Magazines E-Commerce</span>
+                  </div>
+
+                  <h3 className="font-black text-slate-900 text-lg group-hover:text-indigo-600 transition-colors tracking-tight">
+                    {cat.name}
+                  </h3>
+                  <p className="text-[11px] font-bold text-slate-500 mt-0.5 line-clamp-1">{cat.hindiName}</p>
+
+                  {/* High-Tech Popular Exams with Official Logos */}
+                  <div className="space-y-1.5 mt-4">
+                    {cat.exams.slice(0, 3).map((e) => (
+                      <button
+                        key={e.id}
+                        onClick={() => selectExamById(e.id)}
+                        className="w-full text-left p-1.5 px-2.5 rounded-xl bg-slate-50 hover:bg-white text-slate-800 hover:text-indigo-600 border border-slate-200/70 hover:border-indigo-400 hover:shadow-xs transition-all flex items-center justify-between gap-2 cursor-pointer group/pill"
+                      >
+                        <div className="flex items-center gap-2 min-w-0">
+                          <ExamLogo examId={e.id} category={cat.name} size="sm" customLogoUrl={e.logoUrl} />
+                          <span className="text-xs font-extrabold truncate">{e.name}</span>
+                        </div>
+                        <span className="text-[10px] text-slate-400 group-hover/pill:text-indigo-600 shrink-0">&rarr;</span>
+                      </button>
+                    ))}
                   </div>
                 </div>
-                <h3 className="text-2xl font-black text-slate-900 font-display">
-                  Physical Hard Copy Books & Magazines
-                </h3>
-                <p className="text-xs text-slate-600 max-w-xl">
-                  Order authentic physical paperbacks printed on 70 GSM maplitho with high-durability thermal lamination. Seamless online cart, checkout, and Razorpay payment.
-                </p>
+
+                <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between text-xs">
+                  <button
+                    onClick={() => selectExamById(cat.exams[0].id)}
+                    className="font-black text-indigo-600 hover:text-indigo-800 flex items-center gap-1 cursor-pointer"
+                  >
+                    <span>Full {cat.name} Hub</span>
+                    <ChevronRight className="w-3.5 h-3.5" />
+                  </button>
+                  <span className="text-[10px] text-emerald-600 font-bold bg-emerald-50 px-2 py-0.5 rounded">
+                    Syllabus Live
+                  </span>
+                </div>
               </div>
-
-              <button
-                onClick={() => {
-                  setPortalMode('booksboon');
-                  setCurrentView('product');
-                }}
-                className="inline-flex items-center gap-2 px-5 py-3 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs shadow-md transition-all cursor-pointer shrink-0"
-              >
-                <span>Browse Full BooksBoon Catalog</span>
-                <ArrowRight className="w-4 h-4 text-amber-400" />
-              </button>
             </div>
+          ))}
+        </div>
+      </section>
 
-            {/* Official Real Banner Images Showcase */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-6">
-              {BOOKS_DATA.filter(b => b.bannerImage).slice(0, 5).map((book) => (
-                <div 
-                  key={book.id}
-                  onClick={() => setSelectedBook(book)}
-                  className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm hover:shadow-xl hover:-translate-y-2 transition-all duration-300 flex flex-col justify-between group cursor-pointer"
-                >
-                  <div>
-                    {/* Real Image Container */}
-                    <div className="relative aspect-3/4 w-full bg-slate-100 overflow-hidden border-b border-slate-100">
-                      <BookImage 
-                        book={book} 
-                        className="w-full h-full object-cover group-hover:scale-108 transition-transform duration-500" 
-                      />
-                      <span className="absolute top-2.5 left-2.5 px-2 py-0.5 rounded-md bg-slate-950/80 backdrop-blur-xs text-[10px] font-bold text-white shadow-xs">
-                        {book.badge || 'Official Book'}
-                      </span>
-                    </div>
+      {/* 3. BOOKSBOON BOOKS LISTING & BESTSELLERS */}
+      <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-6">
+        <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4 pb-4 border-b border-slate-200">
+          <div>
+            <div className="flex items-center gap-2">
+              <span className="px-2.5 py-0.5 rounded-md bg-amber-400 text-slate-950 text-xs font-black uppercase tracking-wider shadow-2xs">
+                BooksBoon Publications
+              </span>
+              <span className="text-xs text-slate-500 font-medium">Original Hard Copies · Direct Publisher</span>
+            </div>
+            <h2 className="text-2xl sm:text-3xl font-black text-slate-900 font-display mt-1">
+              Featured Books &amp; Exam Solved Papers
+            </h2>
+            <p className="text-xs sm:text-sm text-slate-600 mt-1">
+              High GSM white bond paper, comprehensive chapterwise theory &amp; error-free answer keys.
+            </p>
+          </div>
 
-                    <div className="p-4 space-y-1.5">
-                      <span className="text-[10px] font-bold text-amber-700 uppercase tracking-wider block truncate">
-                        {book.category}
-                      </span>
-                      <h4 className="font-extrabold text-sm text-slate-900 group-hover:text-indigo-600 transition-colors line-clamp-2">
-                        {book.title}
-                      </h4>
-                      <p className="text-[11px] text-slate-500 line-clamp-1">By {book.author}</p>
-                    </div>
+          <button
+            onClick={() => {
+              setFilterCategory('All');
+              setCurrentView('product');
+            }}
+            className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold transition-all shadow-md shrink-0 cursor-pointer"
+          >
+            <span>View Full Catalog</span>
+            <ArrowRight className="w-4 h-4 text-amber-400" />
+          </button>
+        </div>
+
+        {/* Books Grid with HD Gradient Borders */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+          {BOOKS_DATA.slice(0, 4).map((book) => (
+            <div 
+              key={book.id}
+              className="p-[1.5px] rounded-3xl bg-gradient-to-br from-amber-400/40 via-orange-500/20 to-indigo-500/30 hover:from-amber-400 hover:via-orange-500 hover:to-indigo-600 shadow-sm hover:shadow-2xl hover:shadow-amber-500/20 transition-all duration-300 flex flex-col justify-between group"
+            >
+              <div className="bg-white p-4 rounded-[22.5px] h-full flex flex-col justify-between">
+                <div>
+                  <div 
+                    onClick={() => setSelectedBook(book)}
+                    className="relative aspect-3/4 w-full bg-slate-100 rounded-2xl overflow-hidden border border-slate-200/80 cursor-pointer shadow-xs"
+                  >
+                    <BookImage book={book} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
+                    <span className="absolute top-2.5 left-2.5 px-2.5 py-0.5 rounded-md bg-slate-950/85 backdrop-blur-xs text-[10px] font-black text-amber-300 shadow-xs border border-amber-400/30">
+                      {book.badge || 'Official Book'}
+                    </span>
                   </div>
 
-                  <div className="p-4 pt-0 space-y-3">
-                    <div className="flex items-center justify-between">
+                  <div className="pt-3.5 space-y-1.5">
+                    <span className="text-[10px] font-black text-amber-700 uppercase tracking-wider block truncate">
+                      {book.category}
+                    </span>
+                    <h4 
+                      onClick={() => setSelectedBook(book)}
+                      className="font-extrabold text-sm text-slate-900 line-clamp-2 hover:text-indigo-600 transition-colors cursor-pointer"
+                    >
+                      {isHindi && book.hindiTitle ? book.hindiTitle : book.title}
+                    </h4>
+                    <p className="text-xs text-slate-500 truncate">{book.author}</p>
+
+                    <div className="flex items-center justify-between pt-2">
                       <div>
                         <span className="text-base font-black text-slate-900">₹{book.paperbackPrice}</span>
-                        <span className="text-xs text-slate-400 line-through ml-1.5">₹{book.originalPrice}</span>
+                        <span className="text-xs text-slate-400 line-through ml-1.5 font-normal">₹{book.originalPrice}</span>
                       </div>
-                      <span className="text-[10px] text-emerald-700 font-bold bg-emerald-50 px-2 py-0.5 rounded">
-                        Hard Copy
+                      <span className="text-[11px] font-bold text-emerald-600 bg-emerald-50 border border-emerald-200/60 px-1.5 py-0.5 rounded-md">
+                        {Math.round(((book.originalPrice - book.paperbackPrice) / book.originalPrice) * 100)}% off
                       </span>
                     </div>
-
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        addToCart(book, 'Paperback');
-                        setCurrentView('checkout');
-                      }}
-                      className="w-full py-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs flex items-center justify-center gap-1.5 transition-colors cursor-pointer shadow-xs"
-                    >
-                      <ShoppingBag className="w-3.5 h-3.5" />
-                      <span>Buy Hard Copy</span>
-                    </button>
                   </div>
                 </div>
-              ))}
+
+                <div className="pt-4 mt-2 border-t border-slate-100 flex items-center gap-2">
+                  <button
+                    onClick={() => addToCart(book, 'Paperback')}
+                    className="flex-1 py-2 px-3 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-bold transition-colors flex items-center justify-center gap-1.5 cursor-pointer"
+                  >
+                    <ShoppingBag className="w-3.5 h-3.5" />
+                    <span>Add to Cart</span>
+                  </button>
+                  <button
+                    onClick={() => {
+                      addToCart(book, 'Paperback');
+                      setCurrentView('checkout');
+                    }}
+                    className="py-2 px-3 bg-amber-400 hover:bg-amber-300 text-slate-950 rounded-xl text-xs font-black transition-colors cursor-pointer shadow-xs"
+                  >
+                    Buy Now
+                  </button>
+                </div>
+              </div>
             </div>
-
-          </div>
-        )}
-
-        {/* PILLAR 2: SAMWEDNA GROUP OF INSTITUTES SHOWCASE */}
-        {activeCategoryTab === 'institute' && (
-          <div className="bg-gradient-to-br from-indigo-50/50 via-white to-cyan-50/30 rounded-3xl border border-indigo-200/80 p-8 sm:p-10 shadow-sm space-y-8 animate-fadeIn">
-            
-            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-6 border-b border-indigo-200/60">
-              <div className="space-y-2">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-xl overflow-hidden bg-white border border-indigo-300 p-0.5 shadow-xs shrink-0">
-                    <img 
-                      src="https://cdn.jsdelivr.net/gh/luckymohittiwari52-oss/quiz-assets@main/images/sjgj.jpg" 
-                      alt="Samwedna Group of Institutes" 
-                      className="w-full h-full object-contain"
-                    />
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <span className="px-2.5 py-0.5 rounded-full bg-indigo-600 text-white text-xs font-black">
-                      samwedna.org
-                    </span>
-                    <span className="text-xs font-bold text-indigo-800">Complete Student Preparation Solution</span>
-                  </div>
-                </div>
-                <h3 className="text-2xl font-black text-slate-900 font-display">
-                  Daily Current Affairs, Test Series, Free PDFs & Video Lectures
-                </h3>
-                <p className="text-xs text-slate-600 max-w-xl">
-                  Comprehensive digital ecosystem engineered for UPSC, UPPSC, SSC CGL, Teaching, Railway, and Banking exams with authenticated student dashboard and Supabase persistence.
-                </p>
-              </div>
-
-              <button
-                onClick={() => {
-                  setPortalMode('institute');
-                  setCurrentView('current-affairs');
-                }}
-                className="inline-flex items-center gap-2 px-5 py-3 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs shadow-md transition-all cursor-pointer shrink-0"
-              >
-                <span>Enter Student Portal</span>
-                <ArrowRight className="w-4 h-4 text-cyan-300" />
-              </button>
-            </div>
-
-            {/* 4 Feature Columns Grid */}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-              
-              {/* Feature 1: Daily Current Affairs */}
-              <div 
-                onClick={() => {
-                  setPortalMode('institute');
-                  setCurrentView('current-affairs');
-                }}
-                className="bg-white rounded-2xl border border-slate-200 p-6 shadow-xs hover:shadow-lg hover:-translate-y-1 transition-all cursor-pointer space-y-4 group"
-              >
-                <div className="w-12 h-12 rounded-xl bg-cyan-100 text-cyan-700 flex items-center justify-center font-bold">
-                  <Sparkles className="w-6 h-6" />
-                </div>
-                <div>
-                  <h4 className="font-bold text-base text-slate-900 group-hover:text-indigo-600 transition-colors">
-                    Daily Current Affairs
-                  </h4>
-                  <p className="text-xs text-slate-500 mt-1">
-                    Updated every morning with key points, bilingual notes, and 5 instant retention MCQs.
-                  </p>
-                </div>
-                <span className="text-xs font-bold text-indigo-600 flex items-center gap-1">
-                  <span>Read Today&apos;s Edition</span>
-                  <ArrowRight className="w-3.5 h-3.5" />
-                </span>
-              </div>
-
-              {/* Feature 2: CBT Test Series */}
-              <div 
-                onClick={() => {
-                  setPortalMode('institute');
-                  setCurrentView('test-series');
-                }}
-                className="bg-white rounded-2xl border border-slate-200 p-6 shadow-xs hover:shadow-lg hover:-translate-y-1 transition-all cursor-pointer space-y-4 group"
-              >
-                <div className="w-12 h-12 rounded-xl bg-indigo-100 text-indigo-700 flex items-center justify-center font-bold">
-                  <Award className="w-6 h-6" />
-                </div>
-                <div>
-                  <h4 className="font-bold text-base text-slate-900 group-hover:text-indigo-600 transition-colors">
-                    Real Exam CBT Test Series
-                  </h4>
-                  <p className="text-xs text-slate-500 mt-1">
-                    Actual TCS iON & NTA pattern: timer, question palette, negative marks, and All-India Rank.
-                  </p>
-                </div>
-                <span className="text-xs font-bold text-indigo-600 flex items-center gap-1">
-                  <span>Take Live CBT Test</span>
-                  <ArrowRight className="w-3.5 h-3.5" />
-                </span>
-              </div>
-
-              {/* Feature 3: Free PDFs & Study Material */}
-              <div 
-                onClick={() => {
-                  setPortalMode('institute');
-                  setCurrentView('free-pdfs');
-                }}
-                className="bg-white rounded-2xl border border-slate-200 p-6 shadow-xs hover:shadow-lg hover:-translate-y-1 transition-all cursor-pointer space-y-4 group"
-              >
-                <div className="w-12 h-12 rounded-xl bg-emerald-100 text-emerald-700 flex items-center justify-center font-bold">
-                  <FileText className="w-6 h-6" />
-                </div>
-                <div>
-                  <h4 className="font-bold text-base text-slate-900 group-hover:text-indigo-600 transition-colors">
-                    Free PDFs & E-Books
-                  </h4>
-                  <p className="text-xs text-slate-500 mt-1">
-                    NCERT capsules, Polity cheat sheets, speed maths formulas, and topper handwritten notes.
-                  </p>
-                </div>
-                <span className="text-xs font-bold text-indigo-600 flex items-center gap-1">
-                  <span>Browse Free PDFs</span>
-                  <ArrowRight className="w-3.5 h-3.5" />
-                </span>
-              </div>
-
-              {/* Feature 4: Video Lectures */}
-              <div 
-                onClick={() => {
-                  setPortalMode('institute');
-                  setCurrentView('video-lectures');
-                }}
-                className="bg-white rounded-2xl border border-slate-200 p-6 shadow-xs hover:shadow-lg hover:-translate-y-1 transition-all cursor-pointer space-y-4 group"
-              >
-                <div className="w-12 h-12 rounded-xl bg-rose-100 text-rose-700 flex items-center justify-center font-bold">
-                  <Video className="w-6 h-6" />
-                </div>
-                <div>
-                  <h4 className="font-bold text-base text-slate-900 group-hover:text-indigo-600 transition-colors">
-                    Faculty Video Lectures
-                  </h4>
-                  <p className="text-xs text-slate-500 mt-1">
-                    Concept breakdown videos covering Polity, Speed Maths, Static GK, and Reasoning puzzles.
-                  </p>
-                </div>
-                <span className="text-xs font-bold text-indigo-600 flex items-center gap-1">
-                  <span>Watch Lectures</span>
-                  <ArrowRight className="w-3.5 h-3.5" />
-                </span>
-              </div>
-
-            </div>
-
-          </div>
-        )}
-
+          ))}
+        </div>
       </section>
 
-      {/* 4. Student Preparation Feature Spotlight */}
-      <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="bg-gradient-to-r from-slate-950 via-slate-900 to-indigo-950 text-white rounded-3xl p-8 sm:p-12 border border-slate-800 shadow-2xl relative overflow-hidden">
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-center">
-            
-            <div className="lg:col-span-8 space-y-4">
-              <span className="text-xs font-bold uppercase tracking-wider text-cyan-400 block">
-                Dedicated Student Dashboard & Profile
-              </span>
-              <h2 className="text-2xl sm:text-3xl font-black font-display tracking-tight text-white">
-                Track Your Marks, All-India Rank, and BooksBoon Orders in One Place
+      {/* 4. SAMWEDNA SECTIONS: DAILY CURRENT AFFAIRS & FREE STUDY MATERIAL */}
+      <section className="bg-gradient-to-b from-slate-100 to-white py-12 border-y border-slate-200">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-8">
+          
+          <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4 pb-4 border-b border-slate-200">
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="px-2.5 py-0.5 rounded-md bg-indigo-600 text-white text-xs font-black uppercase tracking-wider">
+                  Samwedna Institute
+                </span>
+                <span className="text-xs text-slate-500 font-medium">Daily Updated Knowledge</span>
+              </div>
+              <h2 className="text-2xl sm:text-3xl font-black text-slate-900 font-display mt-1">
+                Daily Current Affairs &amp; Free Study Material
               </h2>
-              <p className="text-xs sm:text-sm text-slate-300 max-w-xl leading-relaxed">
-                Log in to review your CBT performance history, bookmark high-yield current affairs, access downloaded PDF study materials, and track hard copy deliveries.
+              <p className="text-xs sm:text-sm text-slate-600 mt-1">
+                HTML-formatted analytical capsules with interactive MCQs and instant PDF formula sheets.
               </p>
+            </div>
 
-              <div className="flex flex-wrap items-center gap-3 pt-2">
-                <button
-                  onClick={() => setCurrentView('student-dashboard')}
-                  className="px-5 py-2.5 rounded-xl bg-cyan-400 hover:bg-cyan-300 text-slate-950 font-bold text-xs shadow-md transition-all cursor-pointer"
-                >
-                  Open Student Dashboard
-                </button>
+            <div className="flex items-center gap-3">
+              <button
+                onClick={() => setCurrentView('current-affairs')}
+                className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold rounded-xl transition-colors cursor-pointer"
+              >
+                All Current Affairs
+              </button>
+              <button
+                onClick={() => setCurrentView('free-pdfs')}
+                className="px-4 py-2 bg-white hover:bg-slate-50 text-slate-800 border border-slate-300 text-xs font-bold rounded-xl transition-colors cursor-pointer"
+              >
+                All Free PDFs
+              </button>
+            </div>
+          </div>
 
-                <button
-                  onClick={() => setCurrentView('signin')}
-                  className="px-4 py-2.5 rounded-xl bg-white/10 hover:bg-white/20 border border-white/20 text-white font-semibold text-xs transition-colors cursor-pointer"
-                >
-                  Student Sign In / Register
-                </button>
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+            
+            {/* Daily Current Affairs Column */}
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <h3 className="font-black text-base text-slate-900 flex items-center gap-2">
+                  <Zap className="w-4 h-4 text-yellow-500" />
+                  <span>Today's Current Affairs Capsules</span>
+                </h3>
+              </div>
+
+              <div className="space-y-3">
+                {currentAffairs.slice(0, 3).map((article) => (
+                  <div 
+                    key={article.id}
+                    onClick={() => {
+                      setSelectedCaArticleId(article.id);
+                      setCurrentView('current-affairs');
+                    }}
+                    className="bg-white rounded-2xl p-3.5 sm:p-4 border border-slate-200/90 shadow-xs hover:border-indigo-400 hover:shadow-md transition-all cursor-pointer flex items-center gap-3.5 sm:gap-4 group"
+                  >
+                    {/* Image Logo of Topic at Left of Text */}
+                    <div className="shrink-0">
+                      <TopicLogo 
+                        imageUrl={article.imageUrl || article.bannerImage}
+                        category={article.category}
+                        title={article.title}
+                        size="md"
+                      />
+                    </div>
+
+                    {/* Topic Text Content on Right */}
+                    <div className="min-w-0 flex-1 space-y-1">
+                      <div className="flex items-center justify-between text-xs">
+                        <span className="font-bold text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded text-[10px] tracking-wide">
+                          {article.category}
+                        </span>
+                        <span className="text-slate-400 text-[11px] flex items-center gap-1 font-medium">
+                          <Calendar className="w-3 h-3 text-slate-400" />
+                          {article.date}
+                        </span>
+                      </div>
+                      <h4 className="font-bold text-sm text-slate-900 line-clamp-1 group-hover:text-indigo-600 transition-colors">
+                        {isHindi && article.hindiTitle ? article.hindiTitle : article.title}
+                      </h4>
+                      <p className="text-xs text-slate-500 line-clamp-2 leading-relaxed">
+                        {isHindi && article.hindiSummary ? article.hindiSummary : article.summary}
+                      </p>
+                    </div>
+                  </div>
+                ))}
               </div>
             </div>
 
-            <div className="lg:col-span-4 bg-white/5 backdrop-blur-md rounded-2xl p-5 border border-white/10 space-y-3">
-              <span className="text-[11px] font-bold text-amber-300 uppercase tracking-wider block">
-                Live Platform Stats
-              </span>
-              <div className="space-y-2 text-xs">
-                <div className="flex justify-between text-slate-300">
-                  <span>Enrolled Students</span>
-                  <strong className="text-white">45,000+</strong>
-                </div>
-                <div className="flex justify-between text-slate-300">
-                  <span>Daily Current Affairs Readers</span>
-                  <strong className="text-white">12,400+ Daily</strong>
-                </div>
-                <div className="flex justify-between text-slate-300">
-                  <span>Hard Copies Dispatched</span>
-                  <strong className="text-white">35,000+ Books</strong>
-                </div>
-                <div className="flex justify-between text-slate-300">
-                  <span>Database Sync</span>
-                  <strong className="text-emerald-400">Supabase Cloud Active</strong>
-                </div>
+            {/* Free Downloadable PDFs Column */}
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <h3 className="font-black text-base text-slate-900 flex items-center gap-2">
+                  <FileText className="w-4 h-4 text-rose-500" />
+                  <span>Free Downloadable PDF Capsules</span>
+                </h3>
+              </div>
+
+              <div className="space-y-3">
+                {freePdfs.slice(0, 3).map((pdf) => (
+                  <div 
+                    key={pdf.id}
+                    className="bg-white rounded-2xl p-4 border border-slate-200 shadow-xs hover:border-indigo-400 transition-all flex items-center justify-between gap-3"
+                  >
+                    <div className="flex items-center gap-3 min-w-0">
+                      <div className="w-10 h-10 rounded-xl bg-rose-50 text-rose-600 flex items-center justify-center font-bold shrink-0">
+                        <FileText className="w-5 h-5" />
+                      </div>
+                      <div className="min-w-0">
+                        <span className="text-[10px] font-bold text-slate-400 uppercase">{pdf.category}</span>
+                        <h4 className="font-bold text-sm text-slate-900 truncate">
+                          {isHindi && pdf.hindiTitle ? pdf.hindiTitle : pdf.title}
+                        </h4>
+                        <span className="text-[11px] text-slate-500">{pdf.pages} Pages · {pdf.fileSize}</span>
+                      </div>
+                    </div>
+
+                    <a
+                      href={pdf.downloadUrl}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="px-3.5 py-1.5 rounded-xl bg-slate-900 hover:bg-indigo-600 text-white font-bold text-xs flex items-center gap-1.5 transition-colors shrink-0"
+                    >
+                      <Download className="w-3.5 h-3.5" />
+                      <span>PDF</span>
+                    </a>
+                  </div>
+                ))}
               </div>
             </div>
 
           </div>
+
+        </div>
+      </section>
+
+      {/* 5. ALL INDIA CBT MOCK TEST SERIES SHOWCASE */}
+      <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-6">
+        <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4 pb-4 border-b border-slate-200">
+          <div>
+            <div className="flex items-center gap-2">
+              <span className="px-2.5 py-0.5 rounded-md bg-emerald-500 text-slate-950 text-xs font-black uppercase tracking-wider">
+                Exam Hall Simulator
+              </span>
+              <span className="text-xs text-slate-500 font-medium">NTA &amp; TCS-iON Architecture</span>
+            </div>
+            <h2 className="text-2xl sm:text-3xl font-black text-slate-900 font-display mt-1">
+              All India Computer Based Tests (CBT)
+            </h2>
+            <p className="text-xs sm:text-sm text-slate-600 mt-1">
+              Simulate real examination room experience with countdown timer, negative marking, and instant percentile analytics.
+            </p>
+          </div>
+
+          <button
+            onClick={() => setCurrentView('test-series')}
+            className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold transition-all shadow-xs shrink-0 cursor-pointer"
+          >
+            <span>View All CBT Tests</span>
+            <ArrowRight className="w-4 h-4" />
+          </button>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          {testSeriesList.slice(0, 3).map((test) => (
+            <div 
+              key={test.id}
+              className="bg-white rounded-2xl border border-slate-200 p-5 shadow-xs hover:shadow-md transition-shadow flex flex-col justify-between"
+            >
+              <div>
+                <div className="flex items-center justify-between mb-2">
+                  <span className="px-2 py-0.5 rounded bg-emerald-50 text-emerald-700 text-[11px] font-bold border border-emerald-200">
+                    {test.difficulty}
+                  </span>
+                  <span className="text-xs font-bold text-slate-500">
+                    {test.durationMinutes} Min · {test.totalMarks} Marks
+                  </span>
+                </div>
+
+                <h4 className="font-extrabold text-slate-900 text-base leading-snug">
+                  {isHindi && test.hindiTitle ? test.hindiTitle : test.title}
+                </h4>
+
+                <div className="mt-3 p-3 bg-slate-50 rounded-xl space-y-1 text-xs text-slate-600">
+                  <div className="flex justify-between">
+                    <span>Questions:</span>
+                    <span className="font-bold text-slate-800">{test.totalQuestions} Qs</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span>Negative Marking:</span>
+                    <span className="font-bold text-rose-600">-0.50 Marks</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span>Candidates Attempted:</span>
+                    <span className="font-bold text-indigo-600">{(test.enrolledStudents || 1200).toLocaleString()}+</span>
+                  </div>
+                </div>
+              </div>
+
+              <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between">
+                <span className="text-xs font-bold text-emerald-600">Free All-India Demo</span>
+                <button
+                  onClick={() => setActiveTestExam(test)}
+                  className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 transition-colors cursor-pointer"
+                >
+                  <Play className="w-3.5 h-3.5 fill-white" />
+                  <span>Start Test</span>
+                </button>
+              </div>
+            </div>
+          ))}
         </div>
       </section>
 

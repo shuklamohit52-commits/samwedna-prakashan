@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useApp } from '../context/AppContext';
 import { 
   ShieldCheck, 
@@ -39,14 +39,19 @@ import {
   Award,
   X,
   FileSpreadsheet,
-  GraduationCap
+  GraduationCap,
+  Briefcase
 } from 'lucide-react';
 import { 
   testSupabaseConnection, 
   saveSupabaseConfig, 
   getStoredSupabaseConfig, 
-  isSupabaseConfigured 
+  isSupabaseConfigured,
+  getSupabaseSchemaSql,
+  syncAllDataToSupabase
 } from '../services/supabase';
+import { ExamLogo } from '../components/ExamLogo';
+import { ExamSubItem } from '../data/examsData';
 import { 
   CurrentAffairArticle, 
   FreePdfResource, 
@@ -86,11 +91,20 @@ export const AdminPanelView: React.FC = () => {
     addTestSeries,
     booksCatalog,
     addBookToCatalog,
+    examsCategories,
+    addOrUpdateExam,
+    deleteExamFromState,
     showToast 
   } = useApp();
 
   const [adminPasscode, setAdminPasscode] = useState('');
-  const [activeAdminTab, setActiveAdminTab] = useState<'analytics' | 'students' | 'current-affairs' | 'quiz' | 'pdfs' | 'videos' | 'books' | 'supabase'>('analytics');
+  const [activeAdminTab, setActiveAdminTab] = useState<'analytics' | 'students' | 'current-affairs' | 'quiz' | 'pdfs' | 'videos' | 'books' | 'exams' | 'supabase'>('analytics');
+
+  useEffect(() => {
+    window.scrollTo({ top: 0, left: 0, behavior: 'instant' });
+    document.documentElement.scrollTop = 0;
+    document.body.scrollTop = 0;
+  }, [activeAdminTab]);
 
   // Device file upload states
   const [pdfFileName, setPdfFileName] = useState('');
@@ -105,6 +119,27 @@ export const AdminPanelView: React.FC = () => {
   const [isTestingSupabase, setIsTestingSupabase] = useState(false);
   const [supabaseStatusMsg, setSupabaseStatusMsg] = useState<{ success: boolean; message: string } | null>(null);
   const [copiedSql, setCopiedSql] = useState(false);
+  const [isSyncingSupabase, setIsSyncingSupabase] = useState(false);
+  const [syncStatusMsg, setSyncStatusMsg] = useState<{ success: boolean; message: string } | null>(null);
+
+  // Exam Management State
+  const [examFormCategory, setExamFormCategory] = useState<string>('ssc');
+  const [examId, setExamId] = useState('');
+  const [examName, setExamName] = useState('');
+  const [examHindiName, setExamHindiName] = useState('');
+  const [examFullName, setExamFullName] = useState('');
+  const [examOfficialBoard, setExamOfficialBoard] = useState('Staff Selection Commission (SSC)');
+  const [examLogoUrl, setExamLogoUrl] = useState('');
+  const [examBadge, setExamBadge] = useState('Tier 1 & 2 • 2026');
+  const [examVacancies, setExamVacancies] = useState('3,500+ Posts');
+  const [examEligibility, setExamEligibility] = useState('Graduation in any discipline');
+  const [examPattern, setExamPattern] = useState('Tier 1 (CBT) + Tier 2 (CBT)');
+  const [examTotalMarks, setExamTotalMarks] = useState('200 Marks');
+  const [examNegativeMarking, setExamNegativeMarking] = useState('-0.50 Marks');
+  const [examDescription, setExamDescription] = useState('');
+  const [examHindiDescription, setExamHindiDescription] = useState('');
+  const [editingExamId, setEditingExamId] = useState<string | null>(null);
+  const [examSearchFilter, setExamSearchFilter] = useState('');
 
   // Student Tracking & Management State
   const [studentSearch, setStudentSearch] = useState('');
@@ -688,76 +723,154 @@ export const AdminPanelView: React.FC = () => {
   };
 
   const copySqlSchema = () => {
-    const sql = `-- SUPABASE DATABASE SCHEMA FOR SAMWEDNA INSTITUTE & BOOKSBOON
-CREATE TABLE IF NOT EXISTS orders (
-  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
-  orderId TEXT UNIQUE NOT NULL,
-  trackingId TEXT,
-  studentEmail TEXT NOT NULL,
-  studentName TEXT NOT NULL,
-  phone TEXT,
-  address JSONB,
-  items JSONB,
-  subtotal NUMERIC,
-  shippingFee NUMERIC,
-  totalAmount NUMERIC NOT NULL,
-  paymentMethod TEXT,
-  paymentId TEXT,
-  paymentStatus TEXT,
-  shippingStatus TEXT DEFAULT 'Processing',
-  courierPartner TEXT,
-  estimatedDelivery TEXT,
-  createdAt TIMESTAMPTZ DEFAULT NOW()
-);
-
-CREATE TABLE IF NOT EXISTS test_scores (
-  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
-  testId TEXT NOT NULL,
-  testTitle TEXT NOT NULL,
-  student_email TEXT NOT NULL,
-  category TEXT,
-  scoreObtained NUMERIC NOT NULL,
-  totalMarks NUMERIC NOT NULL,
-  accuracyPercentage NUMERIC,
-  percentile NUMERIC,
-  rank INTEGER,
-  totalCandidates INTEGER,
-  timeSpentMinutes INTEGER,
-  dateAttempted TEXT,
-  status TEXT DEFAULT 'Completed',
-  createdAt TIMESTAMPTZ DEFAULT NOW()
-);
-
-CREATE TABLE IF NOT EXISTS current_affairs (
-  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
-  title TEXT NOT NULL,
-  hindiTitle TEXT,
-  date TEXT NOT NULL,
-  category TEXT NOT NULL,
-  tags TEXT[],
-  summary TEXT NOT NULL,
-  keyPoints TEXT[],
-  fullContent TEXT,
-  relatedMcq JSONB,
-  createdAt TIMESTAMPTZ DEFAULT NOW()
-);
-
-CREATE TABLE IF NOT EXISTS free_pdfs (
-  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
-  title TEXT NOT NULL,
-  category TEXT NOT NULL,
-  subject TEXT,
-  fileSize TEXT,
-  pages INTEGER,
-  downloadUrl TEXT NOT NULL,
-  downloadsCount INTEGER DEFAULT 0,
-  createdAt TIMESTAMPTZ DEFAULT NOW()
-);`;
-
+    const sql = getSupabaseSchemaSql();
     navigator.clipboard.writeText(sql);
     setCopiedSql(true);
-    showToast('Supabase SQL Schema copied to clipboard!', 'success');
+    showToast('Complete Supabase SQL Schema (with Exams & all tables) copied to clipboard!', 'success');
     setTimeout(() => setCopiedSql(false), 3000);
+  };
+
+  const handleSyncAllToSupabase = async () => {
+    if (!isSupabaseConfigured()) {
+      showToast('Please configure and test your Supabase URL & Anon Key first.', 'error');
+      return;
+    }
+
+    setIsSyncingSupabase(true);
+    setSyncStatusMsg(null);
+
+    // Flatten all exams
+    const allExamsFlat = examsCategories.flatMap(cat => 
+      cat.exams.map(exam => ({
+        id: exam.id,
+        name: exam.name,
+        hindiName: exam.hindiName || null,
+        fullName: exam.fullName,
+        category: cat.id,
+        officialBoard: exam.officialBoard || null,
+        logoUrl: exam.logoUrl || null,
+        badge: exam.badge || null,
+        vacancies: exam.vacancies || null,
+        eligibility: exam.eligibility,
+        pattern: exam.pattern,
+        totalMarks: exam.totalMarks,
+        negativeMarking: exam.negativeMarking || null,
+        description: exam.description,
+        hindiDescription: exam.hindiDescription || null,
+        gradientBorder: exam.gradientBorder || null
+      }))
+    );
+
+    const res = await syncAllDataToSupabase({
+      orders,
+      currentAffairs,
+      freePdfs,
+      videoLectures,
+      books: booksCatalog,
+      exams: allExamsFlat,
+      testSeries: testSeriesList
+    });
+
+    setIsSyncingSupabase(false);
+    if (res.success) {
+      setSyncStatusMsg({
+        success: true,
+        message: `Sync Completed: ${res.details}`
+      });
+      showToast('All app data successfully synced with Supabase cloud database!', 'success');
+    } else {
+      setSyncStatusMsg({
+        success: false,
+        message: res.details
+      });
+      showToast(`Supabase Sync Notice: ${res.details}`, 'error');
+    }
+  };
+
+  const handleCreateOrUpdateExam = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!examName.trim() || !examFullName.trim()) {
+      showToast('Please provide Exam Name and Official Board / Full Name', 'error');
+      return;
+    }
+
+    const finalId = editingExamId || (
+      examId.trim() 
+        ? examId.trim().toLowerCase().replace(/[^a-z0-9_-]/g, '-') 
+        : `${examFormCategory}-${examName.toLowerCase().replace(/[^a-z0-9]/g, '-')}`
+    );
+
+    const examItem: ExamSubItem = {
+      id: finalId,
+      name: examName.trim(),
+      hindiName: examHindiName.trim() || undefined,
+      fullName: examFullName.trim(),
+      officialBoard: examOfficialBoard.trim() || 'Official Commission / Board',
+      logoUrl: examLogoUrl.trim() || undefined,
+      badge: examBadge.trim() || 'Official Exam Hub 2026',
+      vacancies: examVacancies.trim() || undefined,
+      eligibility: examEligibility.trim() || 'As per commission notification',
+      pattern: examPattern.trim() || 'Computer Based Test (CBT)',
+      totalMarks: examTotalMarks.trim() || '200 Marks',
+      negativeMarking: examNegativeMarking.trim() || '-0.25 Marks',
+      description: examDescription.trim() || `Complete syllabus, previous year papers, BooksBoon publications and CBT mock tests for ${examName}.`,
+      hindiDescription: examHindiDescription.trim() || undefined,
+      syllabusHighlights: [
+        'Section 1: General Intelligence, Reasoning & Logical Aptitude',
+        'Section 2: Quantitative Aptitude & Numerical Ability',
+        'Section 3: General Awareness & Current Affairs Takeaways',
+        'Section 4: Language Proficiency & Comprehension'
+      ],
+      gradientBorder: 'from-blue-600 via-indigo-600 to-purple-600'
+    };
+
+    addOrUpdateExam(examFormCategory, examItem);
+    showToast(`${editingExamId ? 'Updated' : 'Added'} examination "${examName}" to ${examFormCategory.toUpperCase()} category!`, 'success');
+
+    // Reset form
+    setEditingExamId(null);
+    setExamId('');
+    setExamName('');
+    setExamHindiName('');
+    setExamFullName('');
+    setExamLogoUrl('');
+    setExamVacancies('');
+    setExamEligibility('Graduation in any discipline');
+    setExamPattern('Tier 1 (CBT) + Tier 2 (CBT)');
+    setExamTotalMarks('200 Marks');
+    setExamNegativeMarking('-0.50 Marks');
+    setExamDescription('');
+    setExamHindiDescription('');
+  };
+
+  const handleStartEditExam = (catId: string, exam: ExamSubItem) => {
+    setEditingExamId(exam.id);
+    setExamFormCategory(catId);
+    setExamId(exam.id);
+    setExamName(exam.name);
+    setExamHindiName(exam.hindiName || '');
+    setExamFullName(exam.fullName);
+    setExamOfficialBoard(exam.officialBoard || '');
+    setExamLogoUrl(exam.logoUrl || '');
+    setExamBadge(exam.badge || 'Official Exam Hub 2026');
+    setExamVacancies(exam.vacancies || '');
+    setExamEligibility(exam.eligibility);
+    setExamPattern(exam.pattern);
+    setExamTotalMarks(exam.totalMarks);
+    setExamNegativeMarking(exam.negativeMarking || '-0.25 Marks');
+    setExamDescription(exam.description);
+    setExamHindiDescription(exam.hindiDescription || '');
+    showToast(`Loaded "${exam.name}" into exam editor`, 'info');
+  };
+
+  const handleDeleteExam = (examIdToDelete: string, examNameToDelete: string) => {
+    if (confirm(`Are you sure you want to delete "${examNameToDelete}" from the examinations hub?`)) {
+      deleteExamFromState(examIdToDelete);
+      showToast(`Deleted exam "${examNameToDelete}"`, 'info');
+      if (editingExamId === examIdToDelete) {
+        setEditingExamId(null);
+      }
+    }
   };
 
   // Security Check 1: User is not logged in at all
@@ -957,6 +1070,13 @@ CREATE TABLE IF NOT EXISTS free_pdfs (
             <span className="text-lg font-black text-emerald-300">{studentsList.length}</span>
           </div>
 
+          <div className="bg-white/5 rounded-xl p-2.5 border border-white/5">
+            <span className="text-[10px] text-slate-400 uppercase font-semibold block">Govt Exams Hub</span>
+            <span className="text-lg font-black text-amber-300">
+              {examsCategories.reduce((sum, cat) => sum + cat.exams.length, 0)}
+            </span>
+          </div>
+
           <div className="bg-white/5 rounded-xl p-2.5 border border-white/5 col-span-2 sm:col-span-1">
             <span className="text-[10px] text-slate-400 uppercase font-semibold block">Orders Placed</span>
             <span className="text-lg font-black text-rose-300">{orders.length}</span>
@@ -974,6 +1094,7 @@ CREATE TABLE IF NOT EXISTS free_pdfs (
           { id: 'pdfs', label: 'Free PDFs & Notes' },
           { id: 'videos', label: 'Video Lectures' },
           { id: 'books', label: 'BooksBoon Store' },
+          { id: 'exams', label: `Exams & Syllabus Hub (${examsCategories.reduce((sum, cat) => sum + cat.exams.length, 0)})` },
           { id: 'supabase', label: 'Supabase Database' },
         ].map((tab) => (
           <button
@@ -2853,19 +2974,452 @@ CREATE TABLE IF NOT EXISTS free_pdfs (
         </div>
       )}
 
-      {/* TAB 7: SUPABASE DATABASE INTEGRATION */}
+      {/* TAB 8: EXAMS & SYLLABUS HUB MANAGEMENT */}
+      {activeAdminTab === 'exams' && (
+        <div className="space-y-8 animate-fadeIn">
+          {/* Header */}
+          <div className="bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 text-white p-6 sm:p-8 rounded-3xl border border-indigo-800/40 shadow-xl flex flex-col md:flex-row md:items-center justify-between gap-6">
+            <div className="space-y-1">
+              <div className="flex items-center gap-2">
+                <span className="px-2.5 py-0.5 rounded-full bg-amber-400 text-slate-950 font-black text-[10px] uppercase tracking-wider">
+                  Official Board Hub
+                </span>
+                <span className="text-xs text-indigo-300 font-bold">
+                  {examsCategories.reduce((sum, cat) => sum + cat.exams.length, 0)} Active Examinations
+                </span>
+              </div>
+              <h2 className="text-2xl font-black font-display tracking-tight text-white">
+                Government Exams &amp; Syllabus Hub Management
+              </h2>
+              <p className="text-xs text-slate-300 max-w-2xl leading-relaxed">
+                Add, customize, and maintain official government examinations across SSC, Railways (RRB), Banking (SBI/IBPS/RBI), Teaching, Civil Services (UPSC), Defence, and Police. Configure vacancies, eligibility, exam patterns, board insignia logos, and bilingual descriptions.
+              </p>
+            </div>
+
+            {editingExamId && (
+              <div className="bg-amber-400/20 border border-amber-300/40 rounded-2xl p-4 text-xs text-amber-200 flex items-center justify-between gap-3">
+                <span>Editing: <strong className="text-white">{examName}</strong></span>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setEditingExamId(null);
+                    setExamName('');
+                    setExamHindiName('');
+                    setExamFullName('');
+                    setExamLogoUrl('');
+                  }}
+                  className="px-3 py-1 bg-white/20 hover:bg-white/30 text-white rounded-lg font-bold"
+                >
+                  Cancel
+                </button>
+              </div>
+            )}
+          </div>
+
+          {/* Exam Creation & Edit Form */}
+          <div className="bg-white rounded-3xl border border-slate-200 p-6 sm:p-8 shadow-sm space-y-6">
+            <div className="pb-4 border-b border-slate-100 flex items-center justify-between">
+              <div>
+                <h3 className="text-base font-bold text-slate-900">
+                  {editingExamId ? `Edit Examination: ${examName}` : 'Add New Government Examination to Hub'}
+                </h3>
+                <p className="text-xs text-slate-500">Provide official details, syllabus highlights, and real board insignia</p>
+              </div>
+              <span className="text-[11px] font-bold text-indigo-600 bg-indigo-50 px-3 py-1 rounded-full border border-indigo-200">
+                Bilingual &amp; Real Logo Supported
+              </span>
+            </div>
+
+            <form onSubmit={handleCreateOrUpdateExam} className="space-y-5 text-xs">
+              {/* Category & Board Selection */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="space-y-1">
+                  <label className="block font-semibold text-slate-700">Exam Category Section *</label>
+                  <select
+                    value={examFormCategory}
+                    onChange={(e) => setExamFormCategory(e.target.value)}
+                    className="w-full px-3 py-2.5 rounded-xl border border-slate-300 text-xs bg-white font-medium"
+                  >
+                    {examsCategories.map(cat => (
+                      <option key={cat.id} value={cat.id}>{cat.name} ({cat.exams.length} exams)</option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="space-y-1">
+                  <label className="block font-semibold text-slate-700">Official Board / Commission Name *</label>
+                  <input
+                    type="text"
+                    required
+                    value={examOfficialBoard}
+                    onChange={(e) => setExamOfficialBoard(e.target.value)}
+                    placeholder="e.g. Staff Selection Commission (SSC) or Railway Recruitment Board (RRB)"
+                    className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs"
+                  />
+                </div>
+              </div>
+
+              {/* Exam Name Bilingual */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="space-y-1">
+                  <label className="block font-semibold text-slate-700">Exam Short Name (English) *</label>
+                  <input
+                    type="text"
+                    required
+                    value={examName}
+                    onChange={(e) => setExamName(e.target.value)}
+                    placeholder="e.g. SSC CGL or RRB NTPC"
+                    className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs font-bold"
+                  />
+                </div>
+
+                <div className="space-y-1">
+                  <label className="block font-semibold text-slate-700">परीक्षा का संक्षिप्त नाम (हिन्दी / Hindi)</label>
+                  <input
+                    type="text"
+                    value={examHindiName}
+                    onChange={(e) => setExamHindiName(e.target.value)}
+                    placeholder="उदा. एसएससी सीजीएल या रेलवे एनटीपीसी"
+                    className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs bg-amber-50/20 font-bold"
+                  />
+                </div>
+              </div>
+
+              {/* Full Official Title */}
+              <div className="space-y-1">
+                <label className="block font-semibold text-slate-700">Full Official Examination Name *</label>
+                <input
+                  type="text"
+                  required
+                  value={examFullName}
+                  onChange={(e) => setExamFullName(e.target.value)}
+                  placeholder="e.g. Staff Selection Commission Combined Graduate Level Examination"
+                  className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs"
+                />
+              </div>
+
+              {/* Logo URL & Logo Preview */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                <div className="sm:col-span-2 space-y-1">
+                  <label className="block font-semibold text-slate-700">Official Logo URL (Optional, otherwise built-in real vector insignia is used)</label>
+                  <input
+                    type="text"
+                    value={examLogoUrl}
+                    onChange={(e) => setExamLogoUrl(e.target.value)}
+                    placeholder="https://... or leave empty to use built-in official board vector emblem"
+                    className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs font-mono"
+                  />
+                </div>
+
+                <div className="space-y-1">
+                  <label className="block font-semibold text-slate-700">Board Insignia Preview</label>
+                  <div className="h-10 flex items-center gap-2 px-3 bg-slate-50 rounded-xl border border-slate-200">
+                    <ExamLogo 
+                      examId={editingExamId || examName.toLowerCase().replace(/[^a-z0-9]/g, '-')} 
+                      logoUrl={examLogoUrl || undefined}
+                      size="sm"
+                    />
+                    <span className="text-[11px] font-bold text-slate-600 truncate">
+                      {examOfficialBoard || 'Board Insignia'}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Vacancies, Badge, Eligibility, Pattern */}
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+                <div className="space-y-1">
+                  <label className="block font-semibold text-slate-700">Vacancies / Posts</label>
+                  <input
+                    type="text"
+                    value={examVacancies}
+                    onChange={(e) => setExamVacancies(e.target.value)}
+                    placeholder="e.g. 17,727+ Posts"
+                    className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs"
+                  />
+                </div>
+
+                <div className="space-y-1">
+                  <label className="block font-semibold text-slate-700">Exam Badge</label>
+                  <input
+                    type="text"
+                    value={examBadge}
+                    onChange={(e) => setExamBadge(e.target.value)}
+                    placeholder="e.g. Tier 1 & 2 • 2026"
+                    className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs"
+                  />
+                </div>
+
+                <div className="space-y-1">
+                  <label className="block font-semibold text-slate-700">Total Marks</label>
+                  <input
+                    type="text"
+                    value={examTotalMarks}
+                    onChange={(e) => setExamTotalMarks(e.target.value)}
+                    placeholder="e.g. 200 Marks"
+                    className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs font-bold text-amber-600"
+                  />
+                </div>
+
+                <div className="space-y-1">
+                  <label className="block font-semibold text-slate-700">Negative Marking</label>
+                  <input
+                    type="text"
+                    value={examNegativeMarking}
+                    onChange={(e) => setExamNegativeMarking(e.target.value)}
+                    placeholder="e.g. -0.50 Marks"
+                    className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs font-bold text-rose-600"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="space-y-1">
+                  <label className="block font-semibold text-slate-700">Eligibility Criteria *</label>
+                  <input
+                    type="text"
+                    required
+                    value={examEligibility}
+                    onChange={(e) => setExamEligibility(e.target.value)}
+                    placeholder="e.g. Graduation in any stream from recognized university"
+                    className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs"
+                  />
+                </div>
+
+                <div className="space-y-1">
+                  <label className="block font-semibold text-slate-700">Exam Scheme / Pattern *</label>
+                  <input
+                    type="text"
+                    required
+                    value={examPattern}
+                    onChange={(e) => setExamPattern(e.target.value)}
+                    placeholder="e.g. Tier 1 (CBT Prelims) + Tier 2 (CBT Mains) + Data Entry"
+                    className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs"
+                  />
+                </div>
+              </div>
+
+              {/* Descriptions Bilingual */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="space-y-1">
+                  <label className="block font-semibold text-slate-700">Description &amp; Overview (English)</label>
+                  <textarea
+                    rows={3}
+                    value={examDescription}
+                    onChange={(e) => setExamDescription(e.target.value)}
+                    placeholder="Comprehensive overview of exam stages, syllabus, BooksBoon study materials and mock tests..."
+                    className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs"
+                  />
+                </div>
+
+                <div className="space-y-1">
+                  <label className="block font-semibold text-slate-700">विवरण व मुख्य बातें (हिन्दी / Hindi)</label>
+                  <textarea
+                    rows={3}
+                    value={examHindiDescription}
+                    onChange={(e) => setExamHindiDescription(e.target.value)}
+                    placeholder="परीक्षा प्रारूप, पात्रता, बुक्सबून प्रकाशन पुस्तकें एवं अखिल भारतीय मॉक टेस्ट विवरण..."
+                    className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs bg-amber-50/20"
+                  />
+                </div>
+              </div>
+
+              {/* High-Tech Card Live Preview */}
+              <div className="p-4 bg-slate-900 rounded-2xl border border-slate-800 text-white space-y-2">
+                <span className="text-[10px] font-bold text-cyan-300 uppercase tracking-widest block">
+                  High-Tech HD Gradient Card Preview (Student View)
+                </span>
+                <div className="p-[1.5px] rounded-2xl bg-gradient-to-r from-blue-600 via-indigo-600 to-purple-600 shadow-lg max-w-sm">
+                  <div className="bg-slate-950 p-4 rounded-[14.5px] space-y-3">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2.5">
+                        <ExamLogo 
+                          examId={editingExamId || examName.toLowerCase().replace(/[^a-z0-9]/g, '-')} 
+                          logoUrl={examLogoUrl || undefined}
+                          size="md"
+                        />
+                        <div>
+                          <h4 className="font-bold text-white text-sm">{examName || 'Exam Name'}</h4>
+                          <span className="text-[10px] text-slate-400 block truncate max-w-[170px]">{examOfficialBoard}</span>
+                        </div>
+                      </div>
+                      <span className="px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-400/30 text-[10px] font-bold">
+                        {examVacancies || 'Vacancies'}
+                      </span>
+                    </div>
+                    <div className="grid grid-cols-2 gap-2 text-[10px] text-slate-300 pt-2 border-t border-slate-800">
+                      <div><span className="text-slate-500 block">Marks:</span> <strong className="text-amber-400">{examTotalMarks || '200 Marks'}</strong></div>
+                      <div><span className="text-slate-500 block">Pattern:</span> <strong className="text-white truncate block">{examPattern || 'CBT 1 & 2'}</strong></div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Submit Buttons */}
+              <div className="flex items-center gap-3 pt-2">
+                <button
+                  type="submit"
+                  className="px-6 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold cursor-pointer shadow-md transition-all flex items-center gap-2"
+                >
+                  <Briefcase className="w-4 h-4" />
+                  <span>{editingExamId ? 'Save & Update Examination' : 'Publish Examination to Hub'}</span>
+                </button>
+
+                {editingExamId && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setEditingExamId(null);
+                      setExamName('');
+                      setExamHindiName('');
+                      setExamFullName('');
+                      setExamLogoUrl('');
+                    }}
+                    className="px-4 py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold cursor-pointer"
+                  >
+                    Cancel Edit
+                  </button>
+                )}
+              </div>
+            </form>
+          </div>
+
+          {/* Existing Examinations Directory with High-Tech HD Cards */}
+          <div className="space-y-4">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div>
+                <h3 className="text-base font-bold text-slate-900">Configured Examinations Across All Boards</h3>
+                <p className="text-xs text-slate-500">Edit syllabus, change board insignias, or remove obsolete exam categories</p>
+              </div>
+
+              {/* Search Filter */}
+              <div className="relative w-full sm:w-72">
+                <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                <input
+                  type="text"
+                  value={examSearchFilter}
+                  onChange={(e) => setExamSearchFilter(e.target.value)}
+                  placeholder="Filter exams by name or board..."
+                  className="w-full pl-9 pr-3 py-1.5 rounded-xl border border-slate-300 text-xs bg-white"
+                />
+              </div>
+            </div>
+
+            <div className="space-y-6">
+              {examsCategories.map((categoryGroup) => {
+                const filteredExams = categoryGroup.exams.filter(e => 
+                  !examSearchFilter || 
+                  e.name.toLowerCase().includes(examSearchFilter.toLowerCase()) ||
+                  e.fullName.toLowerCase().includes(examSearchFilter.toLowerCase()) ||
+                  (e.officialBoard && e.officialBoard.toLowerCase().includes(examSearchFilter.toLowerCase()))
+                );
+
+                if (filteredExams.length === 0) return null;
+
+                return (
+                  <div key={categoryGroup.id} className="bg-white rounded-3xl border border-slate-200 p-5 sm:p-6 shadow-xs space-y-4">
+                    <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+                      <div className="flex items-center gap-2.5">
+                        <span className="w-3 h-3 rounded-full bg-indigo-600" />
+                        <h4 className="font-extrabold text-sm text-slate-900 font-display">
+                          {categoryGroup.name}
+                        </h4>
+                        <span className="px-2.5 py-0.5 rounded-full bg-indigo-50 text-indigo-700 font-bold text-[10px] border border-indigo-200">
+                          {filteredExams.length} Exams
+                        </span>
+                      </div>
+                      <span className="text-[11px] text-slate-400 font-medium">{categoryGroup.hindiName}</span>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                      {filteredExams.map((exam) => (
+                        <div
+                          key={exam.id}
+                          className="p-[1.5px] rounded-2xl bg-gradient-to-r from-blue-600 via-indigo-600 to-purple-600 shadow-xs hover:shadow-md transition-all group"
+                        >
+                          <div className="bg-white rounded-[14.5px] p-4 flex flex-col justify-between h-full space-y-3">
+                            <div className="space-y-2">
+                              <div className="flex items-start justify-between gap-2">
+                                <div className="flex items-center gap-2.5">
+                                  <ExamLogo 
+                                    examId={exam.id} 
+                                    logoUrl={exam.logoUrl} 
+                                    size="md" 
+                                  />
+                                  <div>
+                                    <h5 className="font-bold text-slate-900 text-xs sm:text-sm group-hover:text-indigo-600 transition-colors">
+                                      {exam.name}
+                                    </h5>
+                                    {exam.hindiName && (
+                                      <span className="text-[11px] font-semibold text-amber-700 block">
+                                        {exam.hindiName}
+                                      </span>
+                                    )}
+                                  </div>
+                                </div>
+
+                                {exam.vacancies && (
+                                  <span className="px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 text-[10px] font-bold shrink-0">
+                                    {exam.vacancies}
+                                  </span>
+                                )}
+                              </div>
+
+                              <p className="text-[11px] text-slate-500 font-medium line-clamp-1" title={exam.fullName}>
+                                {exam.fullName}
+                              </p>
+
+                              <div className="bg-slate-50 rounded-xl p-2.5 text-[10px] space-y-1 text-slate-600 border border-slate-100">
+                                <div><strong className="text-slate-800">Board:</strong> {exam.officialBoard || 'Official Commission'}</div>
+                                <div><strong className="text-slate-800">Pattern:</strong> {exam.pattern}</div>
+                                <div><strong className="text-slate-800">Total Marks:</strong> <span className="font-bold text-amber-600">{exam.totalMarks}</span> (Neg: {exam.negativeMarking || '-0.25'})</div>
+                              </div>
+                            </div>
+
+                            <div className="flex items-center justify-between pt-2 border-t border-slate-100 text-xs">
+                              <button
+                                type="button"
+                                onClick={() => handleStartEditExam(categoryGroup.id, exam)}
+                                className="px-3 py-1.5 rounded-lg bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-bold text-xs flex items-center gap-1.5 cursor-pointer transition-colors"
+                              >
+                                <Edit3 className="w-3.5 h-3.5" />
+                                <span>Edit Details</span>
+                              </button>
+
+                              <button
+                                type="button"
+                                onClick={() => handleDeleteExam(exam.id, exam.name)}
+                                className="p-1.5 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-600 font-bold cursor-pointer transition-colors"
+                                title="Delete Examination"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* TAB 9: SUPABASE DATABASE INTEGRATION & LIVE SYNC */}
       {activeAdminTab === 'supabase' && (
-        <div className="bg-white rounded-2xl border border-slate-200 p-6 sm:p-8 space-y-6 shadow-sm">
+        <div className="bg-white rounded-3xl border border-slate-200 p-6 sm:p-8 space-y-6 shadow-sm animate-fadeIn">
           <div className="pb-4 border-b border-slate-100 flex items-center justify-between">
             <div>
-              <h2 className="text-base font-bold text-slate-900">Supabase Database Integration Settings</h2>
-              <p className="text-xs text-slate-500">Connect your Supabase project to persist orders, test scores, and student dashboard records</p>
+              <h2 className="text-base font-bold text-slate-900">Supabase Cloud Database &amp; Real-time Reflection</h2>
+              <p className="text-xs text-slate-500">Configure your Supabase credentials to automatically synchronize every update (Current Affairs, PDFs, Exams, Orders, Mock Tests) across all student devices</p>
             </div>
             <div className={`px-3 py-1 rounded-full text-xs font-bold border flex items-center gap-1.5 ${
               isSupabaseConfigured() ? 'bg-emerald-50 text-emerald-700 border-emerald-300' : 'bg-amber-50 text-amber-700 border-amber-300'
             }`}>
               <Database className="w-3.5 h-3.5" />
-              <span>{isSupabaseConfigured() ? 'Configured' : 'Offline / Local Store'}</span>
+              <span>{isSupabaseConfigured() ? 'Cloud Synced' : 'Offline / Local Store'}</span>
             </div>
           </div>
 
@@ -2896,7 +3450,7 @@ CREATE TABLE IF NOT EXISTS free_pdfs (
               />
             </div>
 
-            <div className="flex items-center gap-3 pt-2">
+            <div className="flex flex-wrap items-center gap-3 pt-2">
               <button
                 type="button"
                 onClick={handleTestSupabase}
@@ -2911,7 +3465,7 @@ CREATE TABLE IF NOT EXISTS free_pdfs (
                 ) : (
                   <>
                     <Database className="w-3.5 h-3.5" />
-                    <span>Test & Save Supabase Connection</span>
+                    <span>Test &amp; Save Supabase Connection</span>
                   </>
                 )}
               </button>
@@ -2922,7 +3476,26 @@ CREATE TABLE IF NOT EXISTS free_pdfs (
                 className="px-4 py-2.5 rounded-xl border border-slate-300 hover:bg-slate-50 text-slate-700 font-semibold flex items-center gap-1.5 cursor-pointer"
               >
                 {copiedSql ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
-                <span>{copiedSql ? 'SQL Copied!' : 'Copy Supabase SQL Schema'}</span>
+                <span>{copiedSql ? 'SQL Schema Copied!' : 'Copy Supabase SQL Schema (All Tables)'}</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={handleSyncAllToSupabase}
+                disabled={isSyncingSupabase}
+                className="px-5 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold flex items-center gap-2 cursor-pointer disabled:opacity-50 shadow-xs"
+              >
+                {isSyncingSupabase ? (
+                  <>
+                    <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                    <span>Syncing Everything to Cloud...</span>
+                  </>
+                ) : (
+                  <>
+                    <Sparkles className="w-3.5 h-3.5" />
+                    <span>Sync All Portal Data to Supabase Now</span>
+                  </>
+                )}
               </button>
             </div>
 
@@ -2936,13 +3509,26 @@ CREATE TABLE IF NOT EXISTS free_pdfs (
               </div>
             )}
 
+            {syncStatusMsg && (
+              <div className={`p-4 rounded-xl border text-xs font-medium ${
+                syncStatusMsg.success 
+                  ? 'bg-indigo-50 text-indigo-900 border-indigo-300' 
+                  : 'bg-rose-50 text-rose-800 border-rose-300'
+              }`}>
+                {syncStatusMsg.message}
+              </div>
+            )}
+
             {/* Quick SQL schema instructions */}
-            <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200 text-xs text-slate-600 space-y-2 mt-4">
-              <span className="font-bold text-slate-800 block">How to set up Supabase tables:</span>
-              <ol className="list-decimal list-inside space-y-1">
-                <li>Create a free project at <strong>supabase.com</strong>.</li>
-                <li>Go to <strong>Project Settings → API</strong> and copy your Project URL & anon key.</li>
-                <li>Go to <strong>SQL Editor</strong> in Supabase, click <strong>&quot;Copy Supabase SQL Schema&quot;</strong> above, paste, and run.</li>
+            <div className="bg-slate-50 p-5 rounded-2xl border border-slate-200 text-xs text-slate-600 space-y-3 mt-4">
+              <span className="font-bold text-slate-800 block text-sm">
+                How to configure Supabase for 100% Real-Time Reflection:
+              </span>
+              <ol className="list-decimal list-inside space-y-1.5 leading-relaxed">
+                <li>Create or sign in to your free project at <strong>supabase.com</strong>.</li>
+                <li>Navigate to <strong>Project Settings → API</strong> and copy your <strong>Project URL</strong> and <strong>Public Anon Key</strong> into the fields above.</li>
+                <li>Navigate to the <strong>SQL Editor</strong> in Supabase, click <strong>&quot;Copy Supabase SQL Schema (All Tables)&quot;</strong> above, paste, and run it. This provisions tables for <code>current_affairs</code>, <code>exams</code>, <code>books</code>, <code>free_pdfs</code>, <code>orders</code>, and <code>test_scores</code>.</li>
+                <li>Click <strong>&quot;Sync All Portal Data to Supabase Now&quot;</strong> to export all administrative and catalog data to the cloud.</li>
               </ol>
             </div>
 

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useApp } from '../context/AppContext';
 import { 
   Calendar, 
@@ -16,16 +16,33 @@ import {
   FileText
 } from 'lucide-react';
 import { CurrentAffairArticle } from '../types';
+import { TopicLogo } from '../components/TopicLogo';
 
 export const DailyCurrentAffairsView: React.FC = () => {
-  const { currentAffairs, user, bookmarkCurrentAffair, showToast, appLanguage, setAppLanguage } = useApp();
+  const { 
+    currentAffairs, 
+    user, 
+    bookmarkCurrentAffair, 
+    showToast, 
+    appLanguage, 
+    setAppLanguage,
+    selectedCaArticleId,
+    setSelectedCaArticleId
+  } = useApp();
   const [selectedCategory, setSelectedCategory] = useState<string>('All');
   const [selectedDate, setSelectedDate] = useState<string>('All');
   const [selectedAnswers, setSelectedAnswers] = useState<Record<string, number>>({});
   const [showExplanation, setShowExplanation] = useState<Record<string, boolean>>({});
   
   // Selected article for complete view (on clicking title or thumbnail)
-  const [selectedArticleId, setSelectedArticleId] = useState<string | null>(null);
+  const [selectedArticleId, setSelectedArticleId] = useState<string | null>(selectedCaArticleId);
+
+  useEffect(() => {
+    if (selectedCaArticleId) {
+      setSelectedArticleId(selectedCaArticleId);
+      window.scrollTo({ top: 0, left: 0, behavior: 'instant' });
+    }
+  }, [selectedCaArticleId]);
 
   const categories = ['All', 'Polity & Constitution', 'Economy & Banking', 'Science & Technology', 'Environment', 'National', 'International Relations'];
   
@@ -130,7 +147,11 @@ export const DailyCurrentAffairsView: React.FC = () => {
           {/* Back Button & Navigation Bar */}
           <div className="flex items-center justify-between pb-4 border-b border-slate-200">
             <button
-              onClick={() => setSelectedArticleId(null)}
+              onClick={() => {
+                setSelectedArticleId(null);
+                setSelectedCaArticleId(null);
+                window.scrollTo({ top: 0, left: 0, behavior: 'instant' });
+              }}
               className="flex items-center gap-2 px-4 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold text-xs transition-colors cursor-pointer"
             >
               <ArrowLeft className="w-4 h-4" />
@@ -196,25 +217,33 @@ export const DailyCurrentAffairsView: React.FC = () => {
               </div>
             )}
 
-            {/* Complete Title (Bilingual) */}
-            <div className="space-y-2">
-              {(isHindiPreferred || isBilingual) && activeArticle.hindiTitle ? (
-                <>
-                  <h2 className="text-2xl sm:text-3xl font-black text-slate-900 font-display leading-snug">
-                    {activeArticle.hindiTitle}
-                  </h2>
-                  <p className="text-sm sm:text-base text-slate-600 font-medium">{activeArticle.title}</p>
-                </>
-              ) : (
-                <>
-                  <h2 className="text-2xl sm:text-3xl font-black text-slate-900 font-display leading-snug">
-                    {activeArticle.title}
-                  </h2>
-                  {activeArticle.hindiTitle && (
-                    <p className="text-sm sm:text-base text-slate-500 font-medium">{activeArticle.hindiTitle}</p>
-                  )}
-                </>
-              )}
+            {/* Complete Title with Topic Logo at left */}
+            <div className="flex items-start gap-4 sm:gap-5">
+              <TopicLogo 
+                imageUrl={activeArticle.imageUrl || activeArticle.bannerImage}
+                category={activeArticle.category}
+                title={activeArticle.title}
+                size="lg"
+              />
+              <div className="space-y-2 min-w-0 flex-1">
+                {(isHindiPreferred || isBilingual) && activeArticle.hindiTitle ? (
+                  <>
+                    <h2 className="text-2xl sm:text-3xl font-black text-slate-900 font-display leading-snug">
+                      {activeArticle.hindiTitle}
+                    </h2>
+                    <p className="text-sm sm:text-base text-slate-600 font-medium">{activeArticle.title}</p>
+                  </>
+                ) : (
+                  <>
+                    <h2 className="text-2xl sm:text-3xl font-black text-slate-900 font-display leading-snug">
+                      {activeArticle.title}
+                    </h2>
+                    {activeArticle.hindiTitle && (
+                      <p className="text-sm sm:text-base text-slate-500 font-medium">{activeArticle.hindiTitle}</p>
+                    )}
+                  </>
+                )}
+              </div>
             </div>
 
             {/* Summary Box */}
@@ -485,21 +514,14 @@ export const DailyCurrentAffairsView: React.FC = () => {
                     onClick={() => openArticleDetail(article.id)}
                     className="bg-white rounded-2xl border border-slate-200 shadow-xs hover:shadow-md hover:border-indigo-300 transition-all p-4 sm:p-5 flex items-center justify-between gap-4 group cursor-pointer"
                   >
-                    {/* Left: Image Icon Thumbnail */}
+                    {/* Left: Image Logo of Topic at Left of Text */}
                     <div className="flex items-center gap-4 min-w-0 flex-1">
-                      <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-2xl overflow-hidden bg-slate-900 border border-slate-200 shrink-0 shadow-xs group-hover:scale-105 transition-transform">
-                        {article.imageUrl || article.bannerImage ? (
-                          <img 
-                            src={article.imageUrl || article.bannerImage} 
-                            alt={article.title}
-                            className="w-full h-full object-cover" 
-                          />
-                        ) : (
-                          <div className="w-full h-full bg-gradient-to-tr from-indigo-700 to-cyan-600 flex items-center justify-center text-white">
-                            <FileText className="w-7 h-7" />
-                          </div>
-                        )}
-                      </div>
+                      <TopicLogo 
+                        imageUrl={article.imageUrl || article.bannerImage}
+                        category={article.category}
+                        title={article.title}
+                        size="md"
+                      />
 
                       {/* Center: ONLY Title & Date */}
                       <div className="min-w-0 flex-1 space-y-1">

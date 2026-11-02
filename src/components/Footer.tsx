@@ -4,12 +4,11 @@ import { BookOpen, MapPin, Phone, Mail, ArrowRight, CheckCircle2, ShieldCheck, K
 import { ExamCategory } from '../types';
 
 export const Footer: React.FC = () => {
-  const { setCurrentView, setPortalMode, setFilterCategory, showToast, isAdmin } = useApp();
+  const { setCurrentView, setPortalMode, setFilterCategory, showToast, isAdmin, selectExamById } = useApp();
   const [newsletterEmail, setNewsletterEmail] = useState('');
   const [subscribed, setSubscribed] = useState(false);
 
   const handleExamClick = (category: ExamCategory) => {
-    setPortalMode('booksboon');
     setFilterCategory(category);
     setCurrentView('product');
     window.scrollTo({ top: 0, behavior: 'smooth' });

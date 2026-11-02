@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useApp } from '../context/AppContext';
 import { 
   User, 
@@ -48,6 +48,12 @@ export const StudentDashboardView: React.FC = () => {
   const [city, setCity] = useState(user?.address?.city || '');
   const [state, setState] = useState(user?.address?.state || '');
   const [pinCode, setPinCode] = useState(user?.address?.pinCode || '');
+
+  useEffect(() => {
+    window.scrollTo({ top: 0, left: 0, behavior: 'instant' });
+    document.documentElement.scrollTop = 0;
+    document.body.scrollTop = 0;
+  }, [accountTab]);
 
   if (!user) {
     return (
