@@ -14,8 +14,8 @@ const isProd = process.env.NODE_ENV === 'production';
 
 app.use(express.json());
 
-const keyId = process.env.RAZORPAY_KEY_ID || process.env.VITE_RAZORPAY_KEY_ID || '';
-const keySecret = process.env.RAZORPAY_KEY_SECRET || '';
+const keyId = process.env.RAZORPAY_KEY_ID || process.env.VITE_RAZORPAY_KEY_ID || 'rzp_live_TwQm9beBBzMRJU';
+const keySecret = process.env.RAZORPAY_KEY_SECRET || 'Oj6KbApxG0c6xzBMo8yhO4kE';
 
 // Initialize Razorpay SDK
 const razorpay = new Razorpay({
@@ -59,6 +59,7 @@ app.post('/api/create-order', async (req: Request, res: Response) => {
       order_id: order.id,
       amount: order.amount,
       currency: order.currency,
+      key_id: keyId,
     });
   } catch (error: any) {
     console.error('Error creating Razorpay order:', error);

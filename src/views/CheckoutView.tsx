@@ -135,7 +135,7 @@ export const CheckoutView: React.FC = () => {
       }
 
       const orderData = await res.json();
-      const razorpayKey = (import.meta as any).env.VITE_RAZORPAY_KEY_ID || 'rzp_test_TpIjIwCL0MqGjE';
+      const razorpayKey = orderData.key_id || (import.meta as any).env.VITE_RAZORPAY_KEY_ID || 'rzp_live_TwQm9beBBzMRJU';
 
       // Step 2: Open official Razorpay modal with order_id
       const options = {
