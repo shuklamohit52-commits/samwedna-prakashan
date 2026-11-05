@@ -12,7 +12,18 @@ const app = express();
 const port = Number(process.env.PORT) || 3000;
 const isProd = process.env.NODE_ENV === 'production';
 
-app.use(express.json());
+app.use((req: Request, res: Response, next) => {
+  res.header('Access-Control-Allow-Origin', '*');
+  res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, PATCH, DELETE, OPTIONS');
+  res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization');
+  if (req.method === 'OPTIONS') {
+    return res.status(200).end();
+  }
+  next();
+});
+
+app.use(express.json({ limit: '10mb' }));
+app.use(express.urlencoded({ extended: true }));
 
 const keyId = process.env.RAZORPAY_KEY_ID || process.env.VITE_RAZORPAY_KEY_ID || 'rzp_live_TwQm9beBBzMRJU';
 const keySecret = process.env.RAZORPAY_KEY_SECRET || 'Oj6KbApxG0c6xzBMo8yhO4kE';
@@ -23,13 +34,28 @@ const razorpay = new Razorpay({
   key_secret: keySecret,
 });
 
-// Endpoint: GET /api/config/razorpay
-app.get('/api/config/razorpay', (_req: Request, res: Response) => {
-  res.json({ key_id: keyId });
+// Endpoint: GET /api/config/razorpay (and /api/config/razorpay/)
+app.all(['/api/config/razorpay', '/api/config/razorpay/'], (_req: Request, res: Response) => {
+  res.json({ key_id: keyId, status: 'active' });
 });
 
-// Endpoint: POST /api/create-order
-app.post('/api/create-order', async (req: Request, res: Response) => {
+// Endpoint: POST /api/create-order (handles both with/without trailing slash, and returns 200 on GET for diagnostics)
+app.all(['/api/create-order', '/api/create-order/'], async (req: Request, res: Response) => {
+  if (req.method === 'GET') {
+    return res.status(200).json({
+      status: 'active',
+      key_id: keyId,
+      message: 'POST to this endpoint with { amount, currency } to create a Razorpay order'
+    });
+  }
+
+  if (req.method !== 'POST') {
+    return res.status(200).json({
+      status: 'ok',
+      key_id: keyId
+    });
+  }
+
   try {
     const { amount, currency = 'INR', receipt, notes } = req.body;
 
@@ -74,8 +100,15 @@ app.post('/api/create-order', async (req: Request, res: Response) => {
   }
 });
 
-// Endpoint: POST /api/verify-payment
-app.post('/api/verify-payment', (req: Request, res: Response) => {
+// Endpoint: POST /api/verify-payment (handles trailing slashes and diagnostic GET)
+app.all(['/api/verify-payment', '/api/verify-payment/'], (req: Request, res: Response) => {
+  if (req.method === 'GET') {
+    return res.status(200).json({
+      status: 'active',
+      message: 'POST to this endpoint with { razorpay_order_id, razorpay_payment_id, razorpay_signature }'
+    });
+  }
+
   try {
     const { razorpay_order_id, razorpay_payment_id, razorpay_signature } = req.body;
 

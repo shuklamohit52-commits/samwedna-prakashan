@@ -3473,17 +3473,18 @@ export const AdminPanelView: React.FC = () => {
               <button
                 type="button"
                 onClick={copySqlSchema}
-                className="px-4 py-2.5 rounded-xl border border-slate-300 hover:bg-slate-50 text-slate-700 font-semibold flex items-center gap-1.5 cursor-pointer"
+                className="px-4 py-2.5 rounded-xl border border-indigo-200 bg-indigo-50/70 hover:bg-indigo-100 text-indigo-900 font-bold flex items-center gap-1.5 cursor-pointer shadow-2xs transition-colors"
+                title="Copies complete SQL with ALTER TABLE ADD COLUMN and GRANT permissions"
               >
                 {copiedSql ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
-                <span>{copiedSql ? 'SQL Schema Copied!' : 'Copy Supabase SQL Schema (All Tables)'}</span>
+                <span>{copiedSql ? 'SQL Migration Copied!' : 'Copy 1-Click Fix & Schema SQL'}</span>
               </button>
 
               <button
                 type="button"
                 onClick={handleSyncAllToSupabase}
                 disabled={isSyncingSupabase}
-                className="px-5 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold flex items-center gap-2 cursor-pointer disabled:opacity-50 shadow-xs"
+                className="px-5 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold flex items-center gap-2 cursor-pointer disabled:opacity-50 shadow-xs transition-all"
               >
                 {isSyncingSupabase ? (
                   <>
@@ -3521,14 +3522,15 @@ export const AdminPanelView: React.FC = () => {
 
             {/* Quick SQL schema instructions */}
             <div className="bg-slate-50 p-5 rounded-2xl border border-slate-200 text-xs text-slate-600 space-y-3 mt-4">
-              <span className="font-bold text-slate-800 block text-sm">
-                How to configure Supabase for 100% Real-Time Reflection:
+              <span className="font-bold text-slate-800 block text-sm flex items-center gap-2">
+                <Database className="w-4 h-4 text-indigo-600" />
+                <span>How to Fix Missing Columns &amp; Table Permissions in Supabase:</span>
               </span>
-              <ol className="list-decimal list-inside space-y-1.5 leading-relaxed">
-                <li>Create or sign in to your free project at <strong>supabase.com</strong>.</li>
-                <li>Navigate to <strong>Project Settings → API</strong> and copy your <strong>Project URL</strong> and <strong>Public Anon Key</strong> into the fields above.</li>
-                <li>Navigate to the <strong>SQL Editor</strong> in Supabase, click <strong>&quot;Copy Supabase SQL Schema (All Tables)&quot;</strong> above, paste, and run it. This provisions tables for <code>current_affairs</code>, <code>exams</code>, <code>books</code>, <code>free_pdfs</code>, <code>orders</code>, and <code>test_scores</code>.</li>
-                <li>Click <strong>&quot;Sync All Portal Data to Supabase Now&quot;</strong> to export all administrative and catalog data to the cloud.</li>
+              <ol className="list-decimal list-inside space-y-2 leading-relaxed">
+                <li>If you ever see <em>&quot;Could not find column in schema cache&quot;</em> or <em>&quot;permission denied for table exams&quot;</em>, click <strong>&quot;Copy 1-Click Fix &amp; Schema SQL&quot;</strong> above.</li>
+                <li>Open your Supabase Project dashboard and navigate to <strong>SQL Editor</strong> (<a href="https://supabase.com/dashboard/project/_/sql" target="_blank" rel="noopener noreferrer" className="text-indigo-600 underline font-semibold">supabase.com/dashboard/project/_/sql</a>).</li>
+                <li>Paste the copied script and click <strong>&quot;RUN&quot;</strong>. This script executes safe <code>ALTER TABLE ADD COLUMN IF NOT EXISTS</code> for all fields (<code>bannerImage</code>, <code>dateAdded</code>, <code>badge</code>, <code>associatedBookId</code>, etc.), grants permissions to the public/anon role on <code>exams</code>, and reloads PostgREST schema cache.</li>
+                <li>Return here and click <strong>&quot;Sync All Portal Data to Supabase Now&quot;</strong>. Sync will complete 100% cleanly! (The app also includes adaptive self-healing so missing columns are handled gracefully).</li>
               </ol>
             </div>
 

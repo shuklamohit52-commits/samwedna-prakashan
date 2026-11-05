@@ -156,144 +156,272 @@ export const HomeView: React.FC = () => {
   return (
     <div className="space-y-16 pb-16">
       
-      {/* 1. Hero Slideshow Section */}
-      <section className="relative overflow-hidden bg-slate-950 text-white min-h-[500px] flex items-center">
-        <div className="absolute inset-0 z-0">
-          <div className="absolute inset-0 bg-radial from-indigo-500/10 via-transparent to-transparent opacity-50" />
-        </div>
+      {/* 1. Hero Slideshow & Showcase Section (Executive Academic Design) */}
+      <section className="relative overflow-hidden bg-gradient-to-br from-[#070b16] via-[#0d162b] to-[#090e1c] text-white py-12 sm:py-16 lg:py-20 border-b border-indigo-950/60">
+        
+        {/* Ambient Lighting & Tech Micro-Grid */}
+        <div className="absolute top-0 inset-x-0 h-[2px] bg-gradient-to-r from-amber-500 via-indigo-400 to-emerald-400 opacity-75" />
+        <div className="absolute top-0 left-1/4 w-[500px] h-[320px] bg-amber-500/10 rounded-full blur-[130px] pointer-events-none" />
+        <div className="absolute bottom-0 right-10 w-[600px] h-[360px] bg-indigo-600/15 rounded-full blur-[140px] pointer-events-none" />
+        <div className="absolute inset-0 bg-[linear-gradient(to_right,rgba(255,255,255,0.03)_1px,transparent_1px),linear-gradient(to_bottom,rgba(255,255,255,0.03)_1px,transparent_1px)] bg-[size:32px_32px] pointer-events-none opacity-80" />
 
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-14 sm:py-16 relative z-10 w-full">
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-10 items-center">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10 w-full">
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-10 lg:gap-12 items-center">
             
             {/* Left Slide Copy */}
             <div className="lg:col-span-7 space-y-6">
               
-              <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-bold border border-white/10 backdrop-blur-md bg-white/5">
-                <span className={`px-2 py-0.5 rounded-full text-[10px] font-black uppercase ${heroSlides[currentSlide].badgeColor}`}>
-                  {heroSlides[currentSlide].badge}
-                </span>
-                <span className="text-slate-300 text-xs hidden sm:inline">
+              {/* Domain Kicker */}
+              <div className="flex flex-wrap items-center gap-3">
+                <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-semibold bg-white/[0.08] border border-white/10 backdrop-blur-md">
+                  <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+                  <span className="text-amber-300 font-bold uppercase tracking-wider text-[11px]">
+                    {heroSlides[currentSlide].badge}
+                  </span>
+                </div>
+                <span className="text-xs text-slate-300 font-medium hidden sm:inline-flex items-center gap-1.5">
+                  <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
                   {heroSlides[currentSlide].accent}
                 </span>
               </div>
 
-              <h1 className="text-3xl sm:text-4xl lg:text-5xl font-black font-display tracking-tight text-white leading-tight">
-                {heroSlides[currentSlide].title}
+              {/* Dynamic Headline */}
+              <h1 className="text-3xl sm:text-4xl lg:text-5xl font-black font-display tracking-tight text-white leading-[1.15]">
+                {currentSlide === 0 ? (
+                  <>
+                    BooksBoon Hard Copies &amp;{' '}
+                    <span className="text-transparent bg-clip-text bg-gradient-to-r from-amber-300 via-amber-200 to-yellow-400">
+                      Master Publications
+                    </span>
+                  </>
+                ) : currentSlide === 1 ? (
+                  <>
+                    Target Your Dream Exam with{' '}
+                    <span className="text-transparent bg-clip-text bg-gradient-to-r from-indigo-300 via-sky-200 to-cyan-300">
+                      50+ Official Hubs
+                    </span>
+                  </>
+                ) : (
+                  <>
+                    <span className="text-transparent bg-clip-text bg-gradient-to-r from-amber-300 via-rose-300 to-yellow-200">
+                      हिन्दी साहित्य का इतिहास
+                    </span>{' '}
+                    (2500+ MCQs)
+                  </>
+                )}
               </h1>
 
-              <p className="text-sm sm:text-base text-slate-300 leading-relaxed max-w-xl">
+              <p className="text-sm sm:text-base text-slate-300 leading-relaxed max-w-xl font-normal">
                 {heroSlides[currentSlide].subheading}
               </p>
 
               {/* Call to Actions */}
-              <div className="flex flex-wrap items-center gap-4 pt-2">
+              <div className="flex flex-wrap items-center gap-4 pt-1">
                 <button
                   onClick={heroSlides[currentSlide].ctaAction}
-                  className="px-6 py-3.5 rounded-xl bg-amber-400 hover:bg-amber-300 text-slate-950 font-black text-xs uppercase tracking-wider shadow-lg shadow-amber-400/20 transition-all flex items-center gap-2 cursor-pointer transform hover:-translate-y-0.5"
+                  className="px-6 py-3.5 rounded-xl bg-gradient-to-r from-amber-400 via-amber-300 to-yellow-400 hover:from-amber-300 hover:to-yellow-300 text-slate-950 font-black text-xs uppercase tracking-wider shadow-lg shadow-amber-400/25 transition-all flex items-center gap-2 cursor-pointer transform hover:-translate-y-0.5 active:translate-y-0"
                 >
+                  <ShoppingBag className="w-4 h-4 text-slate-950" />
                   <span>{heroSlides[currentSlide].ctaText}</span>
                   <ArrowRight className="w-4 h-4" />
                 </button>
 
                 <button
                   onClick={heroSlides[currentSlide].secondaryAction}
-                  className="px-5 py-3.5 rounded-xl bg-white/10 hover:bg-white/20 border border-white/20 text-white font-bold text-xs transition-colors cursor-pointer"
+                  className="px-5 py-3.5 rounded-xl bg-white/10 hover:bg-white/15 border border-white/20 text-white font-bold text-xs uppercase tracking-wider transition-all flex items-center gap-2 cursor-pointer hover:border-white/30 backdrop-blur-sm"
                 >
+                  <Sparkles className="w-4 h-4 text-amber-300" />
                   <span>{heroSlides[currentSlide].secondaryText}</span>
                 </button>
               </div>
 
-              {/* Slide Indicators */}
-              <div className="flex items-center gap-2 pt-2">
-                {heroSlides.map((_, idx) => (
-                  <button
-                    key={idx}
-                    onClick={() => setCurrentSlide(idx)}
-                    className={`h-2 rounded-full transition-all cursor-pointer ${
-                      currentSlide === idx ? 'w-8 bg-amber-400' : 'w-2 bg-slate-700 hover:bg-slate-500'
-                    }`}
-                    aria-label={`Go to slide ${idx + 1}`}
-                  />
-                ))}
+              {/* Segmented Slide Selector */}
+              <div className="pt-2">
+                <div className="inline-flex p-1 bg-white/[0.06] rounded-xl border border-white/10 backdrop-blur-md gap-1">
+                  {[
+                    { label: 'Publications Store', icon: Store },
+                    { label: '50+ Exams Hub', icon: GraduationCap },
+                    { label: 'Bestseller Book', icon: BookOpen },
+                  ].map((tab, idx) => {
+                    const Icon = tab.icon;
+                    const isActive = currentSlide === idx;
+                    return (
+                      <button
+                        key={idx}
+                        onClick={() => setCurrentSlide(idx)}
+                        className={`flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                          isActive 
+                            ? 'bg-amber-400 text-slate-950 shadow-md font-black' 
+                            : 'text-slate-300 hover:text-white hover:bg-white/5'
+                        }`}
+                      >
+                        <Icon className={`w-3.5 h-3.5 ${isActive ? 'text-slate-950' : 'text-slate-400'}`} />
+                        <span className="hidden sm:inline">{tab.label}</span>
+                        <span className="sm:hidden">{idx + 1}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Domain Trust Metrics Strip (Unboxed) */}
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 pt-4 border-t border-white/10 max-w-xl">
+                <div>
+                  <div className="text-xl font-black text-amber-300">50+</div>
+                  <div className="text-[11px] text-slate-400 font-medium">Target Exams Hub</div>
+                </div>
+                <div>
+                  <div className="text-xl font-black text-white">100%</div>
+                  <div className="text-[11px] text-slate-400 font-medium">Genuine Editions</div>
+                </div>
+                <div>
+                  <div className="text-xl font-black text-emerald-400">Speed Post</div>
+                  <div className="text-[11px] text-slate-400 font-medium">All-India Delivery</div>
+                </div>
+                <div>
+                  <div className="text-xl font-black text-sky-400">Live 256-bit</div>
+                  <div className="text-[11px] text-slate-400 font-medium">Razorpay Gateway</div>
+                </div>
               </div>
 
             </div>
 
-            {/* Right Interactive Highlights Card */}
+            {/* Right Showcase Deck (High-Tech Academic Command Card) */}
             <div className="lg:col-span-5">
-              <div className="bg-gradient-to-br from-slate-900/95 to-indigo-950/90 backdrop-blur-xl rounded-3xl p-6 sm:p-7 border border-white/10 shadow-2xl space-y-5">
-                
-                <div className="flex items-center justify-between pb-3 border-b border-white/10">
-                  <div className="flex items-center gap-2">
-                    <Store className="w-4 h-4 text-amber-400" />
-                    <span className="text-xs font-black uppercase tracking-wider text-amber-300">
-                      BooksBoon Quick Dispatch
-                    </span>
-                  </div>
-                  <span className="text-[10px] text-emerald-400 font-bold bg-emerald-500/20 px-2 py-0.5 rounded-full border border-emerald-400/30">
-                    Physical Stock Ready
-                  </span>
-                </div>
-
-                {/* Highlight Real Book */}
-                {BOOKS_DATA[0] && (
-                  <div className="flex items-center gap-4 bg-white/5 p-3.5 rounded-2xl border border-white/10">
-                    <div className="w-16 h-22 rounded-xl overflow-hidden shrink-0 shadow-md">
-                      <BookImage book={BOOKS_DATA[0]} className="w-full h-full object-cover" />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <span className="text-[10px] uppercase font-bold text-amber-400 block truncate">
-                        {BOOKS_DATA[0].category}
-                      </span>
-                      <h4 className="font-bold text-sm text-white line-clamp-1">
-                        {BOOKS_DATA[0].title}
-                      </h4>
-                      <p className="text-xs text-slate-400 truncate">{BOOKS_DATA[0].author}</p>
-                      <div className="flex items-center justify-between mt-2">
-                        <span className="text-sm font-extrabold text-amber-400">
-                          ₹{BOOKS_DATA[0].paperbackPrice}
-                          <span className="text-[11px] text-slate-500 line-through ml-1.5 font-normal">
-                            ₹{BOOKS_DATA[0].originalPrice}
-                          </span>
+              <div className="relative p-[1.5px] rounded-3xl bg-gradient-to-br from-amber-400/40 via-indigo-500/30 to-cyan-400/30 shadow-[0_25px_60px_-15px_rgba(0,0,0,0.8)]">
+                <div className="bg-[#0b1224]/95 backdrop-blur-2xl rounded-[22px] p-6 sm:p-7 border border-white/10 space-y-5 text-white">
+                  
+                  {/* Card Top Status */}
+                  <div className="flex items-center justify-between pb-3 border-b border-white/10">
+                    <div className="flex items-center gap-2">
+                      <div className="w-6 h-6 rounded-md bg-amber-400/10 border border-amber-400/20 flex items-center justify-center">
+                        <Store className="w-3.5 h-3.5 text-amber-400" />
+                      </div>
+                      <div>
+                        <span className="text-xs font-black uppercase tracking-wider text-amber-300 block">
+                          BooksBoon Dispatch Center
                         </span>
-                        <button
-                          onClick={() => {
-                            addToCart(BOOKS_DATA[0], 'Paperback');
-                            setCurrentView('checkout');
-                          }}
-                          className="px-3 py-1 rounded-lg bg-amber-400 hover:bg-amber-300 text-slate-950 font-black text-[11px] cursor-pointer shadow-xs"
-                        >
-                          Buy Hard Copy
-                        </button>
+                        <span className="text-[10px] text-slate-400">Official National Publisher</span>
                       </div>
                     </div>
+                    <span className="inline-flex items-center gap-1.5 text-[10px] text-emerald-400 font-bold bg-emerald-500/15 px-2.5 py-1 rounded-full border border-emerald-400/25">
+                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                      In Stock · Ready
+                    </span>
                   </div>
-                )}
 
-                {/* Instant Search Bar */}
-                <form onSubmit={handleSearchSubmit} className="relative">
-                  <input
-                    type="text"
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                    placeholder="Search books, exams, authors, or PDFs..."
-                    className="w-full pl-9 pr-4 py-2.5 rounded-xl bg-white/10 border border-white/15 text-xs text-white placeholder-slate-400 focus:outline-hidden focus:ring-2 focus:ring-amber-400"
-                  />
-                  <Search className="w-4 h-4 text-slate-400 absolute left-3 top-3" />
-                </form>
+                  {/* Featured Spotlight Publication */}
+                  {BOOKS_DATA[0] && (
+                    <div className="relative overflow-hidden group bg-gradient-to-br from-white/[0.07] to-white/[0.02] p-4 rounded-2xl border border-white/10 hover:border-amber-400/30 transition-all">
+                      <div className="flex gap-4">
+                        <div className="w-20 h-28 rounded-xl overflow-hidden shrink-0 shadow-xl border border-white/10 bg-slate-800">
+                          <BookImage book={BOOKS_DATA[0]} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
+                        </div>
+                        <div className="flex-1 min-w-0 flex flex-col justify-between">
+                          <div>
+                            <div className="flex items-center gap-1.5 mb-1">
+                              <span className="text-[9px] uppercase font-black tracking-wider text-amber-400 bg-amber-400/15 px-2 py-0.5 rounded-md">
+                                {BOOKS_DATA[0].category}
+                              </span>
+                              <span className="text-[10px] text-slate-400 font-semibold flex items-center gap-0.5">
+                                <Star className="w-3 h-3 text-amber-400 fill-amber-400" /> 4.9
+                              </span>
+                            </div>
+                            <h4 className="font-extrabold text-sm text-white line-clamp-2 leading-snug">
+                              {BOOKS_DATA[0].title}
+                            </h4>
+                            <p className="text-xs text-slate-400 truncate mt-1">
+                              {BOOKS_DATA[0].author} (JNU / BHU)
+                            </p>
+                          </div>
+                          
+                          <div className="flex items-center justify-between mt-3 pt-2 border-t border-white/10">
+                            <div>
+                              <span className="text-base font-black text-amber-300">
+                                ₹{BOOKS_DATA[0].paperbackPrice}
+                              </span>
+                              <span className="text-xs text-slate-400 line-through ml-1.5 font-normal">
+                                ₹{BOOKS_DATA[0].originalPrice}
+                              </span>
+                            </div>
+                            <div className="flex items-center gap-1.5">
+                              <button
+                                onClick={() => setSelectedBook(BOOKS_DATA[0])}
+                                className="px-2.5 py-1.5 rounded-lg bg-white/10 hover:bg-white/20 text-white font-bold text-[11px] cursor-pointer transition-colors"
+                              >
+                                Preview
+                              </button>
+                              <button
+                                onClick={() => {
+                                  addToCart(BOOKS_DATA[0], 'Paperback');
+                                  setCurrentView('checkout');
+                                }}
+                                className="px-3.5 py-1.5 rounded-lg bg-gradient-to-r from-amber-400 to-amber-500 hover:from-amber-300 hover:to-amber-400 text-slate-950 font-black text-[11px] cursor-pointer shadow-md shadow-amber-500/20 transition-all flex items-center gap-1"
+                              >
+                                <ShoppingBag className="w-3 h-3 text-slate-950" />
+                                <span>Buy Hard Copy</span>
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  )}
 
-                {/* Feature Bullets */}
-                <div className="grid grid-cols-2 gap-2 text-[11px] text-slate-300 pt-2 border-t border-white/10">
-                  <div className="flex items-center gap-1.5">
-                    <Truck className="w-3.5 h-3.5 text-amber-400" />
-                    <span>Courier All Over India</span>
+                  {/* Fast Search & Direct Exam Filter */}
+                  <div className="space-y-2">
+                    <form onSubmit={handleSearchSubmit} className="relative">
+                      <input
+                        type="text"
+                        value={searchQuery}
+                        onChange={(e) => setSearchQuery(e.target.value)}
+                        placeholder="Search books, exams, authors, or PDFs..."
+                        className="w-full pl-10 pr-20 py-2.5 rounded-xl bg-white/[0.08] border border-white/15 text-xs text-white placeholder-slate-400 focus:outline-hidden focus:ring-2 focus:ring-amber-400 focus:border-amber-400 transition-all"
+                      />
+                      <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-3" />
+                      <button
+                        type="submit"
+                        className="absolute right-1.5 top-1.5 px-2.5 py-1 rounded-lg bg-amber-400 hover:bg-amber-300 text-slate-950 font-black text-[11px] cursor-pointer transition-colors"
+                      >
+                        Search
+                      </button>
+                    </form>
+
+                    {/* Quick Topic Chips */}
+                    <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar py-1 text-[11px]">
+                      <span className="text-slate-400 text-[10px] uppercase font-bold shrink-0">Popular:</span>
+                      {[
+                        { label: 'SSC CGL', examId: 'ssc-cgl' },
+                        { label: 'UGC NET', examId: 'ugc-net-paper-1' },
+                        { label: 'BPSC TRE', examId: 'bpsc-tre' },
+                        { label: 'RRB NTPC', examId: 'rrb-ntpc' },
+                        { label: 'SBI Clerk', examId: 'sbi-clerk' }
+                      ].map((item) => (
+                        <button
+                          key={item.label}
+                          type="button"
+                          onClick={() => selectExamById(item.examId)}
+                          className="px-2 py-0.5 rounded-md bg-white/5 hover:bg-white/15 text-slate-300 hover:text-white border border-white/10 shrink-0 transition-colors cursor-pointer text-[10px] font-semibold"
+                        >
+                          {item.label}
+                        </button>
+                      ))}
+                    </div>
                   </div>
-                  <div className="flex items-center gap-1.5">
-                    <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
-                    <span>Live Razorpay Integration</span>
+
+                  {/* Security & Delivery Assurance */}
+                  <div className="grid grid-cols-2 gap-2 text-[11px] text-slate-300 pt-3 border-t border-white/10">
+                    <div className="flex items-center gap-2">
+                      <Truck className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+                      <span className="truncate">India Post Speed Post</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <ShieldCheck className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+                      <span className="truncate">Live Razorpay Protected</span>
+                    </div>
                   </div>
+
                 </div>
-
               </div>
             </div>
 
