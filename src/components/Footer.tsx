@@ -47,14 +47,20 @@ export const Footer: React.FC = () => {
               <div className="flex items-center -space-x-2">
                 <div className="w-11 h-11 rounded-xl overflow-hidden bg-white border border-emerald-300 shadow-sm flex items-center justify-center p-0.5 z-10 shrink-0">
                   <img 
-                    src="https://cdn.jsdelivr.net/gh/luckymohittiwari52-oss/quiz-assets@main/images/bokbon.jpg" 
+                    src="/logo.jpg" 
+                    onError={(e) => {
+                      (e.currentTarget as HTMLImageElement).src = "https://raw.githubusercontent.com/luckymohittiwari52-oss/quiz-assets/main/images/bokbon.jpg";
+                    }}
                     alt="BooksBoon Official Logo" 
                     className="w-full h-full object-contain rounded-lg"
                   />
                 </div>
                 <div className="w-11 h-11 rounded-xl overflow-hidden bg-white border border-emerald-300 shadow-sm flex items-center justify-center p-0.5 z-0 shrink-0">
                   <img 
-                    src="https://cdn.jsdelivr.net/gh/luckymohittiwari52-oss/quiz-assets@main/images/sjgj.jpg" 
+                    src="/sjgj.jpg" 
+                    onError={(e) => {
+                      (e.currentTarget as HTMLImageElement).src = "https://raw.githubusercontent.com/luckymohittiwari52-oss/quiz-assets/main/images/sjgj.jpg";
+                    }}
                     alt="Samwedna Group of Institutes Official Logo" 
                     className="w-full h-full object-contain rounded-lg"
                   />

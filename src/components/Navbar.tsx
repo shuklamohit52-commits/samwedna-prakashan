@@ -239,14 +239,20 @@ export const Navbar: React.FC = () => {
             <div className="flex items-center -space-x-2">
               <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-2xl overflow-hidden bg-white border-2 border-amber-400 shadow-md flex items-center justify-center p-1 group-hover:scale-105 transition-transform shrink-0 z-10">
                 <img 
-                  src="https://cdn.jsdelivr.net/gh/luckymohittiwari52-oss/quiz-assets@main/images/bokbon.jpg" 
+                  src="/logo.jpg" 
+                  onError={(e) => {
+                    (e.currentTarget as HTMLImageElement).src = "https://raw.githubusercontent.com/luckymohittiwari52-oss/quiz-assets/main/images/bokbon.jpg";
+                  }}
                   alt="BooksBoon Official Logo" 
                   className="w-full h-full object-contain rounded-xl"
                 />
               </div>
               <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl overflow-hidden bg-white border-2 border-indigo-400 shadow-sm flex items-center justify-center p-0.5 group-hover:scale-105 transition-transform shrink-0">
                 <img 
-                  src="https://cdn.jsdelivr.net/gh/luckymohittiwari52-oss/quiz-assets@main/images/sjgj.jpg" 
+                  src="/sjgj.jpg" 
+                  onError={(e) => {
+                    (e.currentTarget as HTMLImageElement).src = "https://raw.githubusercontent.com/luckymohittiwari52-oss/quiz-assets/main/images/sjgj.jpg";
+                  }}
                   alt="Samwedna Group of Institutes Logo" 
                   className="w-full h-full object-contain rounded-lg"
                 />
