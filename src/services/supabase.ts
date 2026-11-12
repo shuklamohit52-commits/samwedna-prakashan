@@ -434,9 +434,12 @@ ALTER TABLE current_affairs ADD COLUMN IF NOT EXISTS "createdAt" TIMESTAMPTZ DEF
 CREATE TABLE IF NOT EXISTS free_pdfs (
   id TEXT PRIMARY KEY,
   title TEXT NOT NULL,
-  category TEXT NOT NULL,
-  "downloadUrl" TEXT NOT NULL
+  category TEXT NOT NULL
 );
+ALTER TABLE free_pdfs ADD COLUMN IF NOT EXISTS "downloadUrl" TEXT;
+ALTER TABLE free_pdfs ADD COLUMN IF NOT EXISTS downloadurl TEXT;
+ALTER TABLE free_pdfs ALTER COLUMN "downloadUrl" DROP NOT NULL;
+ALTER TABLE free_pdfs ALTER COLUMN downloadurl DROP NOT NULL;
 ALTER TABLE free_pdfs ADD COLUMN IF NOT EXISTS "hindiTitle" TEXT;
 ALTER TABLE free_pdfs ADD COLUMN IF NOT EXISTS subject TEXT;
 ALTER TABLE free_pdfs ADD COLUMN IF NOT EXISTS "hindiSubject" TEXT;
@@ -672,7 +675,35 @@ export async function upsertResilient(
       continue;
     }
 
-    // 3. Handle permission errors
+    // 3. Handle NOT NULL constraint violations (e.g. column "downloadurl" vs "downloadUrl")
+    const notNullMatch = errorMsg.match(/null value in column "([^"]+)" of relation "[^"]+" violates not-null constraint/i);
+    if (notNullMatch && notNullMatch[1]) {
+      const colName = notNullMatch[1];
+      console.warn(`[Supabase Sync] Table '${tableName}' has a NOT NULL column '${colName}'. Auto-populating from matching fields...`);
+      currentBatch = currentBatch.map(row => {
+        let val = row[colName];
+        if (val === undefined || val === null) {
+          // Look for case-insensitive match (e.g. downloadUrl matching downloadurl)
+          const matchingKey = Object.keys(row).find(
+            k => k.toLowerCase() === colName.toLowerCase() || 
+                 k.replace(/_/g, '').toLowerCase() === colName.toLowerCase()
+          );
+          if (matchingKey && row[matchingKey] !== undefined && row[matchingKey] !== null) {
+            val = row[matchingKey];
+          }
+        }
+        if (val === undefined || val === null) {
+          val = colName.toLowerCase().includes('url') ? '/samples/sample.pdf' : 'N/A';
+        }
+        return {
+          ...row,
+          [colName]: val
+        };
+      });
+      continue;
+    }
+
+    // 4. Handle permission errors
     if (errorMsg.toLowerCase().includes('permission denied')) {
       return { 
         success: false, 
@@ -744,25 +775,29 @@ export const syncAllDataToSupabase = async (payload: {
 
     // 2. Sync Free PDFs
     if (payload.freePdfs?.length) {
-      const cleanPdfs = payload.freePdfs.map(p => ({
-        id: p.id,
-        title: p.title,
-        hindiTitle: p.hindiTitle || null,
-        category: p.category,
-        subject: p.subject || 'General Studies',
-        hindiSubject: p.hindiSubject || null,
-        fileSize: p.fileSize || '10 MB',
-        pages: Number(p.pages) || 50,
-        downloadUrl: p.downloadUrl || '/samples/sample.pdf',
-        description: p.description || '',
-        hindiDescription: p.hindiDescription || null,
-        language: p.language || 'Bilingual',
-        dateAdded: p.dateAdded || 'Recently Added',
-        downloadsCount: Number(p.downloadsCount) || 1,
-        isTrending: Boolean(p.isTrending),
-        isBilingual: Boolean(p.isBilingual),
-        targetExam: p.targetExam || null
-      }));
+      const cleanPdfs = payload.freePdfs.map(p => {
+        const url = p.downloadUrl || '/samples/sample.pdf';
+        return {
+          id: p.id,
+          title: p.title,
+          hindiTitle: p.hindiTitle || null,
+          category: p.category,
+          subject: p.subject || 'General Studies',
+          hindiSubject: p.hindiSubject || null,
+          fileSize: p.fileSize || '10 MB',
+          pages: Number(p.pages) || 50,
+          downloadUrl: url,
+          downloadurl: url,
+          description: p.description || '',
+          hindiDescription: p.hindiDescription || null,
+          language: p.language || 'Bilingual',
+          dateAdded: p.dateAdded || 'Recently Added',
+          downloadsCount: Number(p.downloadsCount) || 1,
+          isTrending: Boolean(p.isTrending),
+          isBilingual: Boolean(p.isBilingual),
+          targetExam: p.targetExam || null
+        };
+      });
 
       const res = await upsertResilient(client, 'free_pdfs', cleanPdfs, 'id');
       if (res.success) {
