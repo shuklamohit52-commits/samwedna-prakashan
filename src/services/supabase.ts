@@ -95,6 +95,39 @@ export const testSupabaseConnection = async (url: string, anonKey: string): Prom
 };
 
 /**
+ * Checks if a string is already in standard 8-4-4-4-12 UUID format
+ */
+export const isStandardUuid = (str: string): boolean => {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(str);
+};
+
+/**
+ * Deterministically maps any string ID (like 'ca-1793173096472' or 'pdf-01')
+ * into a valid UUID v4 format. This guarantees Supabase tables created with
+ * UUID columns accept rows without throwing syntax errors.
+ */
+export const toDeterministicUuid = (input: string): string => {
+  if (isStandardUuid(input)) return input;
+  let h1 = 0x811c9dc5;
+  let h2 = 0x9e3779b9;
+  let h3 = 0x58765431;
+  let h4 = 0xa5a5a5a5;
+  for (let i = 0; i < input.length; i++) {
+    const c = input.charCodeAt(i);
+    h1 = Math.imul(h1 ^ c, 16777619) >>> 0;
+    h2 = Math.imul(h2 ^ (c << 5), 2246822519) >>> 0;
+    h3 = Math.imul(h3 ^ (c << 9), 3266489917) >>> 0;
+    h4 = Math.imul(h4 ^ (c << 13), 668265263) >>> 0;
+  }
+  const s1 = h1.toString(16).padStart(8, '0');
+  const s2 = (h2 & 0xffff).toString(16).padStart(4, '0');
+  const s3 = ('4' + ((h2 >>> 16) & 0x0fff).toString(16).padStart(3, '0'));
+  const s4 = ('a' + (h3 & 0x0fff).toString(16).padStart(3, '0'));
+  const s5 = (h3.toString(16).padStart(8, '0') + h4.toString(16).padStart(8, '0')).slice(0, 12);
+  return `${s1}-${s2}-${s3}-${s4}-${s5}`;
+};
+
+/**
  * High-reliability Local & Supabase Hybrid Storage
  * Ensures that if Supabase is offline or credentials are not yet entered,
  * student tests, orders, current affairs, and admin uploads are never lost.
@@ -197,7 +230,7 @@ export const CurrentAffairsService = {
   async upsert(article: CurrentAffairArticle): Promise<void> {
     if (supabaseClient) {
       try {
-        await supabaseClient.from('current_affairs').upsert([article], { onConflict: 'id' });
+        await upsertResilient(supabaseClient, 'current_affairs', [article], 'id');
       } catch (e) {
         console.warn('Supabase CA upsert fallback:', e);
       }
@@ -206,7 +239,7 @@ export const CurrentAffairsService = {
   async delete(id: string): Promise<void> {
     if (supabaseClient) {
       try {
-        await supabaseClient.from('current_affairs').delete().eq('id', id);
+        await supabaseClient.from('current_affairs').delete().or(`id.eq.${id},id.eq.${toDeterministicUuid(id)}`);
       } catch (e) {
         console.warn('Supabase CA delete fallback:', e);
       }
@@ -219,7 +252,7 @@ export const FreePdfsService = {
   async upsert(pdf: FreePdfResource): Promise<void> {
     if (supabaseClient) {
       try {
-        await supabaseClient.from('free_pdfs').upsert([pdf], { onConflict: 'id' });
+        await upsertResilient(supabaseClient, 'free_pdfs', [pdf], 'id');
       } catch (e) {
         console.warn('Supabase PDF upsert fallback:', e);
       }
@@ -228,7 +261,7 @@ export const FreePdfsService = {
   async delete(id: string): Promise<void> {
     if (supabaseClient) {
       try {
-        await supabaseClient.from('free_pdfs').delete().eq('id', id);
+        await supabaseClient.from('free_pdfs').delete().or(`id.eq.${id},id.eq.${toDeterministicUuid(id)}`);
       } catch (e) {
         console.warn('Supabase PDF delete fallback:', e);
       }
@@ -280,6 +313,58 @@ export const getSupabaseSchemaSql = (): string => {
 
 -- 1. Enable UUID Extension
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
+
+-- AUTOMATIC TYPE MIGRATION: Convert 'id' column from UUID to TEXT if table was previously created as UUID
+DO $$
+BEGIN
+  -- 1. current_affairs id migration
+  IF EXISTS (
+    SELECT 1 FROM information_schema.columns 
+    WHERE table_schema = 'public' AND table_name = 'current_affairs' AND column_name = 'id' AND data_type = 'uuid'
+  ) THEN
+    ALTER TABLE public.current_affairs ALTER COLUMN id TYPE TEXT USING id::TEXT;
+  END IF;
+
+  -- 2. free_pdfs id migration
+  IF EXISTS (
+    SELECT 1 FROM information_schema.columns 
+    WHERE table_schema = 'public' AND table_name = 'free_pdfs' AND column_name = 'id' AND data_type = 'uuid'
+  ) THEN
+    ALTER TABLE public.free_pdfs ALTER COLUMN id TYPE TEXT USING id::TEXT;
+  END IF;
+
+  -- 3. books id migration
+  IF EXISTS (
+    SELECT 1 FROM information_schema.columns 
+    WHERE table_schema = 'public' AND table_name = 'books' AND column_name = 'id' AND data_type = 'uuid'
+  ) THEN
+    ALTER TABLE public.books ALTER COLUMN id TYPE TEXT USING id::TEXT;
+  END IF;
+
+  -- 4. exams id migration
+  IF EXISTS (
+    SELECT 1 FROM information_schema.columns 
+    WHERE table_schema = 'public' AND table_name = 'exams' AND column_name = 'id' AND data_type = 'uuid'
+  ) THEN
+    ALTER TABLE public.exams ALTER COLUMN id TYPE TEXT USING id::TEXT;
+  END IF;
+
+  -- 5. test_series id migration
+  IF EXISTS (
+    SELECT 1 FROM information_schema.columns 
+    WHERE table_schema = 'public' AND table_name = 'test_series' AND column_name = 'id' AND data_type = 'uuid'
+  ) THEN
+    ALTER TABLE public.test_series ALTER COLUMN id TYPE TEXT USING id::TEXT;
+  END IF;
+
+  -- 6. video_lectures id migration
+  IF EXISTS (
+    SELECT 1 FROM information_schema.columns 
+    WHERE table_schema = 'public' AND table_name = 'video_lectures' AND column_name = 'id' AND data_type = 'uuid'
+  ) THEN
+    ALTER TABLE public.video_lectures ALTER COLUMN id TYPE TEXT USING id::TEXT;
+  END IF;
+END $$;
 
 -- 2. Orders Table (Hard-copy & e-book purchases)
 CREATE TABLE IF NOT EXISTS orders (
@@ -529,10 +614,11 @@ NOTIFY pgrst, 'reload schema';
 
 /**
  * Adaptive resilient upsert helper:
- * Detects missing column errors from Supabase schema cache, strips unknown columns,
- * and retries automatically so that sync succeeds even on legacy or partial table structures.
+ * - Detects missing column errors from Supabase schema cache and strips unknown columns automatically
+ * - Detects UUID column type mismatch (invalid input syntax for type uuid) and converts string IDs to deterministic UUIDs
+ * - Retries automatically so that sync succeeds even on legacy or partial table structures.
  */
-async function upsertResilient(
+export async function upsertResilient(
   client: SupabaseClient,
   tableName: string,
   items: any[],
@@ -543,6 +629,7 @@ async function upsertResilient(
   let currentBatch = items.map(it => ({ ...it }));
   const maxRetries = 15;
   let attempt = 0;
+  let hasConvertedToUuid = false;
 
   while (attempt < maxRetries) {
     attempt++;
@@ -558,7 +645,21 @@ async function upsertResilient(
 
     const errorMsg = error.message || '';
 
-    // Handle missing column in Supabase schema cache
+    // 1. Handle UUID type mismatch when table id column was created as UUID in Postgres
+    if (errorMsg.toLowerCase().includes('invalid input syntax for type uuid') && !hasConvertedToUuid) {
+      hasConvertedToUuid = true;
+      console.warn(`[Supabase Sync] Table '${tableName}' has a UUID primary key. Converting string IDs to valid deterministic UUIDs...`);
+      currentBatch = currentBatch.map(row => {
+        const originalId = String(row.id || '');
+        return {
+          ...row,
+          id: toDeterministicUuid(originalId)
+        };
+      });
+      continue;
+    }
+
+    // 2. Handle missing column in Supabase schema cache
     const match = errorMsg.match(/Could not find the '([^']+)' column/i);
     if (match && match[1]) {
       const missingColumn = match[1];
@@ -571,7 +672,7 @@ async function upsertResilient(
       continue;
     }
 
-    // Handle permission errors
+    // 3. Handle permission errors
     if (errorMsg.toLowerCase().includes('permission denied')) {
       return { 
         success: false, 
