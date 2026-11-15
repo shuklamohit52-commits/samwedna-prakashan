@@ -38,6 +38,8 @@ import {
   ExamsService,
   TestSeriesService,
   VideoLecturesService,
+  AppSettingsService,
+  syncAllDataToSupabase,
   isSupabaseConfigured,
   saveSupabaseConfig,
   initSupabaseClient
@@ -161,6 +163,8 @@ interface AppContextType {
   isAdmin: boolean;
   firebaseAuthEmail: string | null;
   isFirebaseAdminReady: boolean;
+  isSupabaseReady: boolean;
+  refreshSupabaseState: () => void;
   syncAllLocalContentToCloud: () => Promise<{ ok: boolean; summary: string }>;
   refreshPublicCloudData: () => Promise<void>;
   studentsList: UserProfile[];
@@ -276,6 +280,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const firebaseAuthEmail = firebaseAuthUser?.email || null;
   const isFirebaseAdminReady = Boolean(firebaseAuthEmail && isAuthorizedAdmin(firebaseAuthEmail));
+  const [isSupabaseReady, setIsSupabaseReady] = useState<boolean>(() => isSupabaseConfigured());
+  const refreshSupabaseState = () => {
+    setIsSupabaseReady(isSupabaseConfigured());
+  };
 
   // Remote cloud buffers so Firestore + Supabase + defaults merge cleanly without wiping each other
   const remoteBuffersRef = React.useRef<{
@@ -469,15 +477,19 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const fetchAllFromSupabase = async () => {
-    if (!isSupabaseConfigured()) return;
+    const configured = isSupabaseConfigured();
+    setIsSupabaseReady(configured);
+    if (!configured) return;
     try {
-      const [ca, pdfs, tests, videos, books, exams] = await Promise.all([
+      const [ca, pdfs, tests, videos, books, exams, deletedRemote, remoteOrders] = await Promise.all([
         CurrentAffairsService.fetchAll(),
         FreePdfsService.fetchAll(),
         TestSeriesService.fetchAll(),
         VideoLecturesService.fetchAll(),
         BooksService.fetchAll(),
-        ExamsService.fetchAll()
+        ExamsService.fetchAll(),
+        AppSettingsService.getSetting('deleted_items'),
+        OrdersService.getOrders()
       ]);
       remoteBuffersRef.current.caSupabase = ca || [];
       remoteBuffersRef.current.pdfsSupabase = pdfs || [];
@@ -485,6 +497,17 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       remoteBuffersRef.current.videosSupabase = videos || [];
       remoteBuffersRef.current.booksSupabase = books || [];
       remoteBuffersRef.current.examsSupabase = exams || [];
+      if (deletedRemote) {
+        remoteBuffersRef.current.deletedIds = {
+          ca: Array.from(new Set([...(remoteBuffersRef.current.deletedIds.ca || []), ...(Array.isArray(deletedRemote.ca) ? deletedRemote.ca : [])])),
+          pdfs: Array.from(new Set([...(remoteBuffersRef.current.deletedIds.pdfs || []), ...(Array.isArray(deletedRemote.pdfs) ? deletedRemote.pdfs : [])])),
+          exams: Array.from(new Set([...(remoteBuffersRef.current.deletedIds.exams || []), ...(Array.isArray(deletedRemote.exams) ? deletedRemote.exams : [])]))
+        };
+        try { localStorage.setItem('samwedna_deleted_ids', JSON.stringify(remoteBuffersRef.current.deletedIds)); } catch { /* ignore */ }
+      }
+      if (Array.isArray(remoteOrders) && remoteOrders.length > 0) {
+        setOrders(remoteOrders);
+      }
       recomputeMergedState();
     } catch (err) {
       console.warn('Supabase public fetch notice:', err);
@@ -615,6 +638,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         if (!isSupabaseConfigured()) {
           saveSupabaseConfig(data.url, data.anonKey);
           initSupabaseClient(data.url, data.anonKey);
+          setIsSupabaseReady(true);
           fetchAllFromSupabase();
         }
       }
@@ -861,10 +885,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       saveExamToFirestore(categoryId, exam),
       ExamsService.upsert({ ...exam, category: categoryId })
     ]);
-    if (fbRes.ok || sbRes.success) {
+    if (sbRes.success || fbRes.ok) {
       showToast(`Exam "${exam.name}" synced live across website!`, 'success');
     } else {
-      showToast(`Exam "${exam.name}" saved locally only (${fbRes.error || sbRes.message || 'Cloud auth needed'}).`, 'error');
+      const errDetail = isSupabaseConfigured()
+        ? (sbRes.message || fbRes.error || 'Cloud sync failed')
+        : (fbRes.error || sbRes.message || 'Configure Supabase or Firebase Admin Auth');
+      showToast(`Exam "${exam.name}" saved locally only (${errDetail}).`, 'error');
     }
   };
 
@@ -881,7 +908,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     await Promise.all([
       deleteExamFromFirestore(examId),
       ExamsService.delete(examId),
-      savePublicSettingToFirestore('deleted_items', remoteBuffersRef.current.deletedIds)
+      savePublicSettingToFirestore('deleted_items', remoteBuffersRef.current.deletedIds),
+      AppSettingsService.saveSetting('deleted_items', remoteBuffersRef.current.deletedIds)
     ]);
     showToast('Exam removed successfully', 'info');
   };
@@ -1085,10 +1113,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       CurrentAffairsService.upsert(enriched)
     ]);
 
-    if (fbRes.ok || sbRes.success) {
+    if (sbRes.success || fbRes.ok) {
       showToast('Current Affairs published & synced live to ALL users and visitors!', 'success');
     } else {
-      showToast(`Saved on this device only — NOT visible to others yet! ${fbRes.error || sbRes.message || ''}`, 'error');
+      const reason = isSupabaseConfigured() ? (sbRes.message || fbRes.error) : (fbRes.error || sbRes.message);
+      showToast(`Saved on this device only — NOT visible to others yet! ${reason || ''}`, 'error');
     }
   };
 
@@ -1108,10 +1137,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       CurrentAffairsService.upsert(enriched)
     ]);
 
-    if (fbRes.ok || sbRes.success) {
+    if (sbRes.success || fbRes.ok) {
       showToast('Current Affairs article updated & synced live for everyone!', 'success');
     } else {
-      showToast(`Updated locally only — NOT visible to others yet! ${fbRes.error || sbRes.message || ''}`, 'error');
+      const reason = isSupabaseConfigured() ? (sbRes.message || fbRes.error) : (fbRes.error || sbRes.message);
+      showToast(`Updated locally only — NOT visible to others yet! ${reason || ''}`, 'error');
     }
   };
 
@@ -1130,13 +1160,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const [fbRes, sbRes] = await Promise.all([
       deleteCurrentAffairFromFirestore(id),
       CurrentAffairsService.delete(id),
-      savePublicSettingToFirestore('deleted_items', remoteBuffersRef.current.deletedIds)
+      savePublicSettingToFirestore('deleted_items', remoteBuffersRef.current.deletedIds),
+      AppSettingsService.saveSetting('deleted_items', remoteBuffersRef.current.deletedIds)
     ]);
 
-    if (fbRes.ok || sbRes.success) {
+    if (sbRes.success || fbRes.ok) {
       showToast('Current affairs article deleted across website', 'info');
     } else {
-      showToast(`Deleted locally only (${fbRes.error || 'Connect Google Admin Session to remove globally'}).`, 'error');
+      showToast(`Deleted locally only (${sbRes.message || fbRes.error || 'Connect Supabase or Google Admin Session to remove globally'}).`, 'error');
     }
   };
 
@@ -1156,10 +1187,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       FreePdfsService.upsert(enriched)
     ]);
 
-    if (fbRes.ok || sbRes.success) {
+    if (sbRes.success || fbRes.ok) {
       showToast('Free PDF uploaded & synced live for ALL website visitors!', 'success');
     } else {
-      showToast(`PDF saved locally only — NOT visible to others yet! ${fbRes.error || sbRes.message || ''}`, 'error');
+      const reason = isSupabaseConfigured() ? (sbRes.message || fbRes.error) : (fbRes.error || sbRes.message);
+      showToast(`PDF saved locally only — NOT visible to others yet! ${reason || ''}`, 'error');
     }
   };
 
@@ -1178,13 +1210,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const [fbRes, sbRes] = await Promise.all([
       deleteFreePdfFromFirestore(id),
       FreePdfsService.delete(id),
-      savePublicSettingToFirestore('deleted_items', remoteBuffersRef.current.deletedIds)
+      savePublicSettingToFirestore('deleted_items', remoteBuffersRef.current.deletedIds),
+      AppSettingsService.saveSetting('deleted_items', remoteBuffersRef.current.deletedIds)
     ]);
 
-    if (fbRes.ok || sbRes.success) {
+    if (sbRes.success || fbRes.ok) {
       showToast('PDF study resource deleted across website', 'info');
     } else {
-      showToast(`Deleted locally only (${fbRes.error || 'Connect Google Admin Session to remove globally'}).`, 'error');
+      showToast(`Deleted locally only (${sbRes.message || fbRes.error || 'Connect Supabase or Google Admin Session to remove globally'}).`, 'error');
     }
   };
 
@@ -1211,10 +1244,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       VideoLecturesService.upsert(enriched)
     ]);
 
-    if (fbRes.ok || sbRes.success) {
+    if (sbRes.success || fbRes.ok) {
       showToast('Video Lecture synced live for ALL website visitors!', 'success');
     } else {
-      showToast(`Video saved locally only — NOT visible to others yet! ${fbRes.error || sbRes.message || ''}`, 'error');
+      const reason = isSupabaseConfigured() ? (sbRes.message || fbRes.error) : (fbRes.error || sbRes.message);
+      showToast(`Video saved locally only — NOT visible to others yet! ${reason || ''}`, 'error');
     }
   };
 
@@ -1234,10 +1268,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       TestSeriesService.upsert(enriched)
     ]);
 
-    if (fbRes.ok || sbRes.success) {
+    if (sbRes.success || fbRes.ok) {
       showToast(`CBT Mock Test "${enriched.title}" synced live for everyone!`, 'success');
     } else {
-      showToast(`Test saved locally only — NOT visible to others yet! ${fbRes.error || sbRes.message || ''}`, 'error');
+      const reason = isSupabaseConfigured() ? (sbRes.message || fbRes.error) : (fbRes.error || sbRes.message);
+      showToast(`Test saved locally only — NOT visible to others yet! ${reason || ''}`, 'error');
     }
   };
 
@@ -1257,64 +1292,121 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       BooksService.upsert(enriched)
     ]);
 
-    if (fbRes.ok || sbRes.success) {
+    if (sbRes.success || fbRes.ok) {
       showToast(`Book "${enriched.title}" synced live to BooksBoon store!`, 'success');
     } else {
-      showToast(`Book saved locally only — NOT visible to others yet! ${fbRes.error || sbRes.message || ''}`, 'error');
+      const reason = isSupabaseConfigured() ? (sbRes.message || fbRes.error) : (fbRes.error || sbRes.message);
+      showToast(`Book saved locally only — NOT visible to others yet! ${reason || ''}`, 'error');
     }
   };
 
   const syncAllLocalContentToCloud = async (): Promise<{ ok: boolean; summary: string }> => {
-    let syncedCount = 0;
-    const errors: string[] = [];
+    const supabaseConfigured = isSupabaseConfigured();
+    setIsSupabaseReady(supabaseConfigured);
 
-    for (const art of currentAffairs) {
-      const res = await saveCurrentAffairToFirestore({
-        ...art,
-        createdAt: art.createdAt || extractTimestampMs(art) || Date.now()
+    let supabaseOk = false;
+    let supabaseDetails = '';
+
+    // 1. Sync to Supabase directly when configured (does NOT require Firestore at all!)
+    if (supabaseConfigured) {
+      const allExamsFlat = examsCategories.flatMap(cat =>
+        cat.exams.map(exam => ({
+          ...exam,
+          category: cat.id
+        }))
+      );
+      const sbRes = await syncAllDataToSupabase({
+        orders,
+        currentAffairs,
+        freePdfs,
+        videoLectures,
+        books: booksCatalog,
+        exams: allExamsFlat,
+        testSeries: testSeriesList
       });
-      if (res.ok) syncedCount++;
-      else if (res.error && !errors.includes(res.error)) errors.push(res.error);
-    }
-    for (const pdf of freePdfs) {
-      const res = await saveFreePdfToFirestore({
-        ...pdf,
-        createdAt: pdf.createdAt || extractTimestampMs(pdf) || Date.now()
-      });
-      if (res.ok) syncedCount++;
-      else if (res.error && !errors.includes(res.error)) errors.push(res.error);
-    }
-    for (const test of testSeriesList) {
-      const res = await saveTestSeriesToFirestore({
-        ...test,
-        createdAt: test.createdAt || extractTimestampMs(test) || Date.now()
-      });
-      if (res.ok) syncedCount++;
-      else if (res.error && !errors.includes(res.error)) errors.push(res.error);
-    }
-    for (const vid of videoLectures) {
-      const res = await saveVideoLectureToFirestore({
-        ...vid,
-        createdAt: vid.createdAt || extractTimestampMs(vid) || Date.now()
-      });
-      if (res.ok) syncedCount++;
-      else if (res.error && !errors.includes(res.error)) errors.push(res.error);
-    }
-    for (const book of booksCatalog) {
-      const res = await saveBookToFirestore({
-        ...book,
-        createdAt: book.createdAt || extractTimestampMs(book) || Date.now()
-      });
-      if (res.ok) syncedCount++;
-      else if (res.error && !errors.includes(res.error)) errors.push(res.error);
+      await AppSettingsService.saveSetting('deleted_items', remoteBuffersRef.current.deletedIds);
+      supabaseOk = sbRes.success;
+      supabaseDetails = sbRes.details;
     }
 
-    if (errors.length > 0 && syncedCount === 0) {
-      return { ok: false, summary: errors[0] };
+    // 2. Also sync to Firestore if Firebase Admin is signed in (optional when Supabase succeeds)
+    let firestoreSyncedCount = 0;
+    const firestoreErrors: string[] = [];
+
+    if (isFirebaseAdminReady || !supabaseConfigured) {
+      for (const art of currentAffairs) {
+        const res = await saveCurrentAffairToFirestore({
+          ...art,
+          createdAt: art.createdAt || extractTimestampMs(art) || Date.now()
+        });
+        if (res.ok) firestoreSyncedCount++;
+        else if (res.error && !firestoreErrors.includes(res.error)) firestoreErrors.push(res.error);
+      }
+      for (const pdf of freePdfs) {
+        const res = await saveFreePdfToFirestore({
+          ...pdf,
+          createdAt: pdf.createdAt || extractTimestampMs(pdf) || Date.now()
+        });
+        if (res.ok) firestoreSyncedCount++;
+        else if (res.error && !firestoreErrors.includes(res.error)) firestoreErrors.push(res.error);
+      }
+      for (const test of testSeriesList) {
+        const res = await saveTestSeriesToFirestore({
+          ...test,
+          createdAt: test.createdAt || extractTimestampMs(test) || Date.now()
+        });
+        if (res.ok) firestoreSyncedCount++;
+        else if (res.error && !firestoreErrors.includes(res.error)) firestoreErrors.push(res.error);
+      }
+      for (const vid of videoLectures) {
+        const res = await saveVideoLectureToFirestore({
+          ...vid,
+          createdAt: vid.createdAt || extractTimestampMs(vid) || Date.now()
+        });
+        if (res.ok) firestoreSyncedCount++;
+        else if (res.error && !firestoreErrors.includes(res.error)) firestoreErrors.push(res.error);
+      }
+      for (const book of booksCatalog) {
+        const res = await saveBookToFirestore({
+          ...book,
+          createdAt: book.createdAt || extractTimestampMs(book) || Date.now()
+        });
+        if (res.ok) firestoreSyncedCount++;
+        else if (res.error && !firestoreErrors.includes(res.error)) firestoreErrors.push(res.error);
+      }
     }
+
+    if (supabaseOk && firestoreSyncedCount > 0) {
+      return {
+        ok: true,
+        summary: `Synced live to both Supabase (${supabaseDetails}) & Firestore (${firestoreSyncedCount} items)!`
+      };
+    }
+
+    if (supabaseOk) {
+      return {
+        ok: true,
+        summary: `Synced live to Supabase for all visitors (${supabaseDetails})`
+      };
+    }
+
+    if (firestoreSyncedCount > 0) {
+      return {
+        ok: true,
+        summary: `Synced ${firestoreSyncedCount} items live to Firebase cloud for all visitors${firestoreErrors.length > 0 ? ` (${firestoreErrors[0]})` : '!'}`
+      };
+    }
+
+    if (supabaseConfigured && !supabaseOk) {
+      return {
+        ok: false,
+        summary: `Supabase sync error: ${supabaseDetails}`
+      };
+    }
+
     return {
-      ok: true,
-      summary: `Synced ${syncedCount} items live to Firebase cloud for all visitors${errors.length > 0 ? ` (${errors.length} warnings: ${errors[0]})` : '!'}`
+      ok: false,
+      summary: firestoreErrors[0] || 'Configure Supabase in the "Supabase Database" tab (no Firebase rules needed) or sign in with an authorized Firebase project owner account.'
     };
   };
 
@@ -1619,6 +1711,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         isAdmin,
         firebaseAuthEmail,
         isFirebaseAdminReady,
+        isSupabaseReady,
+        refreshSupabaseState,
         syncAllLocalContentToCloud,
         refreshPublicCloudData,
         studentsList,

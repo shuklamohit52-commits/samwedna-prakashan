@@ -169,10 +169,32 @@ export const OrdersService = {
 
   async getOrders(email?: string): Promise<HardCopyOrder[]> {
     const local = getLocalStorageArray<HardCopyOrder>('booksboon_orders', []);
-    if (email) {
-      return local.filter(o => o.studentEmail.toLowerCase() === email.toLowerCase());
+    const client = supabaseClient || initSupabaseClient();
+    let merged = [...local];
+
+    if (client) {
+      try {
+        const { data, error } = await client.from('orders').select('*').order('createdAt', { ascending: false });
+        if (!error && Array.isArray(data)) {
+          const map = new Map<string, HardCopyOrder>();
+          (data as HardCopyOrder[]).forEach(o => {
+            if (o && o.orderId) map.set(o.orderId, o);
+          });
+          local.forEach(o => {
+            if (o && o.orderId && !map.has(o.orderId)) map.set(o.orderId, o);
+          });
+          merged = Array.from(map.values());
+          setLocalStorageArray('booksboon_orders', merged);
+        }
+      } catch (e) {
+        console.warn('Supabase orders fetch fallback:', e);
+      }
     }
-    return local;
+
+    if (email) {
+      return merged.filter(o => o.studentEmail?.toLowerCase() === email.toLowerCase());
+    }
+    return merged;
   },
 
   async updateOrderStatus(orderId: string, status: HardCopyOrder['shippingStatus'], trackingId?: string): Promise<void> {
@@ -230,6 +252,17 @@ export interface SupabaseOpResult {
   message?: string;
 }
 
+const toIsoTimestamp = (val?: number | string): string => {
+  if (typeof val === 'number' && !Number.isNaN(val) && val > 0) {
+    return new Date(val).toISOString();
+  }
+  if (typeof val === 'string' && val.trim()) {
+    const parsed = Date.parse(val);
+    if (!Number.isNaN(parsed)) return new Date(parsed).toISOString();
+  }
+  return new Date().toISOString();
+};
+
 // 3. CURRENT AFFAIRS REPOSITORY
 export const CurrentAffairsService = {
   async upsert(article: CurrentAffairArticle): Promise<SupabaseOpResult> {
@@ -254,7 +287,8 @@ export const CurrentAffairsService = {
         imageUrl: article.imageUrl || null,
         bannerImage: article.bannerImage || article.imageUrl || null,
         pdfUrl: article.pdfUrl || null,
-        relatedMcq: article.relatedMcq || null
+        relatedMcq: article.relatedMcq || null,
+        createdAt: toIsoTimestamp(article.createdAt)
       };
       const res = await upsertResilient(client, 'current_affairs', [clean], 'id');
       return { success: res.success, message: res.message };
@@ -313,7 +347,8 @@ export const FreePdfsService = {
         language: pdf.language || 'Bilingual',
         dateAdded: pdf.dateAdded || 'Recently Added',
         downloadsCount: Number(pdf.downloadsCount) || 1,
-        isTrending: Boolean(pdf.isTrending)
+        isTrending: Boolean(pdf.isTrending),
+        createdAt: toIsoTimestamp(pdf.createdAt)
       };
       const res = await upsertResilient(client, 'free_pdfs', [clean], 'id');
       return { success: res.success, message: res.message };
@@ -375,7 +410,8 @@ export const BooksService = {
         hindiDescription: book.hindiDescription || null,
         bannerImage: book.bannerImage || null,
         inStock: book.inStock !== false,
-        stockCount: Number(book.stockCount) || 100
+        stockCount: Number(book.stockCount) || 100,
+        createdAt: toIsoTimestamp(book.createdAt)
       };
       const res = await upsertResilient(client, 'books', [clean], 'id');
       return { success: res.success, message: res.message };
@@ -458,7 +494,8 @@ export const TestSeriesService = {
         language: test.language || 'Bilingual',
         lastUpdated: test.lastUpdated || '2026',
         associatedBookId: test.associatedBookId || null,
-        questions: test.questions || []
+        questions: test.questions || [],
+        createdAt: toIsoTimestamp(test.createdAt)
       };
       const res = await upsertResilient(client, 'test_series', [clean], 'id');
       return { success: res.success, message: res.message };
@@ -485,7 +522,11 @@ export const VideoLecturesService = {
     const client = supabaseClient || initSupabaseClient();
     if (!client) return { success: false, message: 'Supabase not configured' };
     try {
-      const res = await upsertResilient(client, 'video_lectures', [video], 'id');
+      const clean = {
+        ...video,
+        createdAt: toIsoTimestamp(video.createdAt)
+      };
+      const res = await upsertResilient(client, 'video_lectures', [clean], 'id');
       return { success: res.success, message: res.message };
     } catch (e: any) {
       return { success: false, message: e?.message || String(e) };
@@ -500,6 +541,32 @@ export const VideoLecturesService = {
       return data as VideoLecture[];
     } catch {
       return [];
+    }
+  }
+};
+
+// 9. APP SETTINGS REPOSITORY (Cross-device sync for deleted IDs without requiring Firestore)
+export const AppSettingsService = {
+  async saveSetting(id: string, value: Record<string, any>): Promise<SupabaseOpResult> {
+    const client = supabaseClient || initSupabaseClient();
+    if (!client) return { success: false, message: 'Supabase not configured' };
+    try {
+      const { error } = await client.from('app_settings').upsert([{ id, value, updatedAt: new Date().toISOString() }], { onConflict: 'id' });
+      if (error) return { success: false, message: error.message };
+      return { success: true };
+    } catch (e: any) {
+      return { success: false, message: e?.message || String(e) };
+    }
+  },
+  async getSetting(id: string): Promise<Record<string, any> | null> {
+    const client = supabaseClient || initSupabaseClient();
+    if (!client) return null;
+    try {
+      const { data, error } = await client.from('app_settings').select('value').eq('id', id).maybeSingle();
+      if (error || !data) return null;
+      return (data as any).value || null;
+    } catch {
+      return null;
     }
   }
 };
@@ -759,7 +826,14 @@ ALTER TABLE test_series ADD COLUMN IF NOT EXISTS "associatedBookId" TEXT;
 ALTER TABLE test_series ADD COLUMN IF NOT EXISTS questions JSONB;
 ALTER TABLE test_series ADD COLUMN IF NOT EXISTS "createdAt" TIMESTAMPTZ DEFAULT NOW();
 
--- 10. GRANTS AND ROW LEVEL SECURITY (Fixes permission denied for anon/authenticated)
+-- 10. App Settings Table (Shared metadata such as deleted default IDs)
+CREATE TABLE IF NOT EXISTS app_settings (
+  id TEXT PRIMARY KEY,
+  value JSONB DEFAULT '{}'::jsonb,
+  "updatedAt" TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- 11. GRANTS AND ROW LEVEL SECURITY (Fixes permission denied for anon/authenticated)
 GRANT USAGE ON SCHEMA public TO anon, authenticated, service_role;
 GRANT ALL ON ALL TABLES IN SCHEMA public TO anon, authenticated, service_role;
 GRANT ALL ON ALL SEQUENCES IN SCHEMA public TO anon, authenticated, service_role;
@@ -777,6 +851,7 @@ ALTER TABLE video_lectures ENABLE ROW LEVEL SECURITY;
 ALTER TABLE books ENABLE ROW LEVEL SECURITY;
 ALTER TABLE exams ENABLE ROW LEVEL SECURITY;
 ALTER TABLE test_series ENABLE ROW LEVEL SECURITY;
+ALTER TABLE app_settings ENABLE ROW LEVEL SECURITY;
 
 DROP POLICY IF EXISTS "Public Full Access" ON orders;
 DROP POLICY IF EXISTS "Public Read Access" ON orders;
@@ -810,7 +885,11 @@ DROP POLICY IF EXISTS "Public Full Access" ON test_series;
 DROP POLICY IF EXISTS "Public Read Access" ON test_series;
 CREATE POLICY "Public Full Access" ON test_series FOR ALL TO public USING (true) WITH CHECK (true);
 
--- 11. Notify PostgREST to reload schema cache immediately
+DROP POLICY IF EXISTS "Public Full Access" ON app_settings;
+DROP POLICY IF EXISTS "Public Read Access" ON app_settings;
+CREATE POLICY "Public Full Access" ON app_settings FOR ALL TO public USING (true) WITH CHECK (true);
+
+-- 12. Notify PostgREST to reload schema cache immediately
 NOTIFY pgrst, 'reload schema';
 `;
 };
@@ -862,8 +941,10 @@ export async function upsertResilient(
       continue;
     }
 
-    // 2. Handle missing column in Supabase schema cache
-    const match = errorMsg.match(/Could not find the '([^']+)' column/i);
+    // 2. Handle missing column in Supabase schema cache or Postgres column errors
+    const match =
+      errorMsg.match(/Could not find the '([^']+)' column/i) ||
+      errorMsg.match(/column "([^"]+)" of relation "[^"]+" does not exist/i);
     if (match && match[1]) {
       const missingColumn = match[1];
       console.warn(`[Supabase Sync] Removing unmapped column '${missingColumn}' from table '${tableName}' to retry...`);
@@ -961,7 +1042,8 @@ export const syncAllDataToSupabase = async (payload: {
         imageUrl: a.imageUrl || null,
         bannerImage: a.bannerImage || a.imageUrl || null,
         pdfUrl: a.pdfUrl || null,
-        relatedMcq: a.relatedMcq || null
+        relatedMcq: a.relatedMcq || null,
+        createdAt: toIsoTimestamp(a.createdAt)
       }));
 
       const res = await upsertResilient(client, 'current_affairs', cleanCa, 'id');
@@ -995,7 +1077,8 @@ export const syncAllDataToSupabase = async (payload: {
           downloadsCount: Number(p.downloadsCount) || 1,
           isTrending: Boolean(p.isTrending),
           isBilingual: Boolean(p.isBilingual),
-          targetExam: p.targetExam || null
+          targetExam: p.targetExam || null,
+          createdAt: toIsoTimestamp(p.createdAt)
         };
       });
 
@@ -1032,7 +1115,8 @@ export const syncAllDataToSupabase = async (payload: {
         hindiDescription: b.hindiDescription || null,
         bannerImage: b.bannerImage || null,
         inStock: b.inStock !== false,
-        stockCount: Number(b.stockCount) || 100
+        stockCount: Number(b.stockCount) || 100,
+        createdAt: toIsoTimestamp(b.createdAt)
       }));
 
       const res = await upsertResilient(client, 'books', cleanBooks, 'id');
@@ -1077,7 +1161,8 @@ export const syncAllDataToSupabase = async (payload: {
         language: t.language || 'Bilingual',
         lastUpdated: t.lastUpdated || '2026',
         associatedBookId: t.associatedBookId || null,
-        questions: t.questions || []
+        questions: t.questions || [],
+        createdAt: toIsoTimestamp(t.createdAt)
       }));
 
       const res = await upsertResilient(client, 'test_series', cleanTests, 'id');
@@ -1091,9 +1176,16 @@ export const syncAllDataToSupabase = async (payload: {
 
     // 6. Sync Video Lectures
     if (payload.videoLectures?.length) {
-      const res = await upsertResilient(client, 'video_lectures', payload.videoLectures, 'id');
+      const cleanVideos = payload.videoLectures.map(v => ({
+        ...v,
+        createdAt: toIsoTimestamp(v.createdAt)
+      }));
+      const res = await upsertResilient(client, 'video_lectures', cleanVideos, 'id');
       if (res.success) {
         results.push(`Video Lectures: synced ${res.count} lectures`);
+      } else {
+        allSuccess = false;
+        results.push(`Video Lectures: ${res.message}`);
       }
     }
 

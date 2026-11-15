@@ -71,6 +71,8 @@ export const AdminPanelView: React.FC = () => {
     isAdmin,
     firebaseAuthEmail,
     isFirebaseAdminReady,
+    isSupabaseReady,
+    refreshSupabaseState,
     syncAllLocalContentToCloud,
     refreshPublicCloudData,
     setCurrentView,
@@ -127,6 +129,7 @@ export const AdminPanelView: React.FC = () => {
   const [isTestingSupabase, setIsTestingSupabase] = useState(false);
   const [supabaseStatusMsg, setSupabaseStatusMsg] = useState<{ success: boolean; message: string } | null>(null);
   const [copiedSql, setCopiedSql] = useState(false);
+  const [copiedEnv, setCopiedEnv] = useState(false);
   const [isSyncingSupabase, setIsSyncingSupabase] = useState(false);
   const [syncStatusMsg, setSyncStatusMsg] = useState<{ success: boolean; message: string } | null>(null);
 
@@ -301,13 +304,24 @@ export const AdminPanelView: React.FC = () => {
     setIsTestingSupabase(false);
     setSupabaseStatusMsg(result);
     if (result.success) {
-      saveSupabaseConfig(supabaseUrl, supabaseKey);
+      saveSupabaseConfig(supabaseUrl.trim(), supabaseKey.trim());
+      refreshSupabaseState();
       savePublicSettingToFirestore('supabase', { url: supabaseUrl.trim(), anonKey: supabaseKey.trim() }).catch(() => {});
       refreshPublicCloudData().catch(() => {});
       showToast(result.message, 'success');
     } else {
       showToast(result.message, 'error');
     }
+  };
+
+  const copySupabaseEnvVars = () => {
+    const cleanUrl = supabaseUrl.trim() || 'https://YOUR_PROJECT_REF.supabase.co';
+    const cleanKey = supabaseKey.trim() || 'YOUR_SUPABASE_ANON_KEY';
+    const snippet = `VITE_SUPABASE_URL=${cleanUrl}\nVITE_SUPABASE_ANON_KEY=${cleanKey}`;
+    navigator.clipboard.writeText(snippet);
+    setCopiedEnv(true);
+    showToast('Copied VITE_SUPABASE_URL & VITE_SUPABASE_ANON_KEY for Cloudflare / .env!', 'success');
+    setTimeout(() => setCopiedEnv(false), 3000);
   };
 
   // Handlers for submitting new items
@@ -1063,11 +1077,11 @@ export const AdminPanelView: React.FC = () => {
                 </span>
                 <span className="text-slate-400 text-xs">•</span>
                 <span className="text-xs text-slate-300">
-                  Firebase Cloud: {isFirebaseAdminReady ? 'Verified Live Broadcast' : 'Local Only (Auth Required)'}
+                  Supabase: {isSupabaseReady ? 'Connected (Active)' : 'Not Configured'}
                 </span>
                 <span className="text-slate-400 text-xs">•</span>
                 <span className="text-xs text-slate-300">
-                  Supabase: {isSupabaseConfigured() ? 'Connected' : 'Optional'}
+                  Firestore: {isFirebaseAdminReady ? 'Auth Verified' : 'Optional'}
                 </span>
               </div>
 
@@ -1140,32 +1154,7 @@ export const AdminPanelView: React.FC = () => {
       </div>
 
       {/* Live Public Broadcast Status Banner */}
-      {!isFirebaseAdminReady ? (
-        <div className="bg-rose-50 border-2 border-rose-300 rounded-2xl p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-sm">
-          <div className="flex items-start gap-3">
-            <div className="p-2 rounded-xl bg-rose-100 text-rose-700 shrink-0">
-              <ShieldAlert className="w-5 h-5" />
-            </div>
-            <div className="space-y-1">
-              <h3 className="text-sm font-black text-rose-900">
-                Action Required: Uploads Are Saving Locally Only (Invisible to Other Users!)
-              </h3>
-              <p className="text-xs text-rose-800 leading-relaxed">
-                You are currently signed in via local email fallback without an active Google Firebase Admin token. Any Current Affairs, PDFs, or Books you upload right now will only show on this browser until you verify your authorized Admin Gmail session.
-              </p>
-            </div>
-          </div>
-          <button
-            type="button"
-            onClick={handleVerifyGoogleAdmin}
-            disabled={isVerifyingGoogleAdmin}
-            className="px-4 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs shrink-0 flex items-center gap-2 cursor-pointer shadow-md disabled:opacity-60"
-          >
-            {isVerifyingGoogleAdmin ? <RefreshCw className="w-4 h-4 animate-spin" /> : <ShieldCheck className="w-4 h-4" />}
-            <span>{isVerifyingGoogleAdmin ? 'Verifying & Syncing...' : 'Verify Google Admin & Sync All Live'}</span>
-          </button>
-        </div>
-      ) : (
+      {isSupabaseReady ? (
         <div className="bg-emerald-50 border border-emerald-200 rounded-2xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-2xs">
           <div className="flex items-center gap-3">
             <div className="p-2 rounded-xl bg-emerald-100 text-emerald-700 shrink-0">
@@ -1173,10 +1162,10 @@ export const AdminPanelView: React.FC = () => {
             </div>
             <div>
               <p className="text-xs font-bold text-emerald-900">
-                Global Cloud Broadcast Active ({firebaseAuthEmail})
+                Supabase Public Cloud Broadcast Active{isFirebaseAdminReady ? ` + Firebase (${firebaseAuthEmail})` : ''}
               </p>
               <p className="text-[11px] text-emerald-700">
-                All Current Affairs, PDFs, Tests, Books &amp; Videos publish directly to Firestore{isSupabaseConfigured() ? ' & Supabase' : ''} so EVERY visitor (logged in with any ID or logged out) sees them immediately.
+                All Current Affairs, PDFs, Tests, Books, Exams &amp; Videos publish directly to Supabase so EVERY visitor (logged in with any ID or logged out) sees them immediately — no Firestore rules required.
               </p>
             </div>
           </div>
@@ -1187,8 +1176,77 @@ export const AdminPanelView: React.FC = () => {
             className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs shrink-0 flex items-center gap-1.5 cursor-pointer shadow-xs disabled:opacity-60"
           >
             <RefreshCw className={`w-3.5 h-3.5 ${isSyncingFirestore ? 'animate-spin' : ''}`} />
-            <span>{isSyncingFirestore ? 'Syncing...' : 'Push All Content to Cloud Now'}</span>
+            <span>{isSyncingFirestore ? 'Syncing...' : 'Push All Content to Supabase Now'}</span>
           </button>
+        </div>
+      ) : isFirebaseAdminReady ? (
+        <div className="bg-indigo-50 border border-indigo-200 rounded-2xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-2xs">
+          <div className="flex items-center gap-3">
+            <div className="p-2 rounded-xl bg-indigo-100 text-indigo-700 shrink-0">
+              <Database className="w-5 h-5" />
+            </div>
+            <div>
+              <p className="text-xs font-bold text-indigo-950">
+                Firebase Session Verified ({firebaseAuthEmail}) — Supabase Recommended for Standalone Sync
+              </p>
+              <p className="text-[11px] text-indigo-800">
+                If Firestore denies permission (e.g., if live Firebase Console rules were only published for the Firebase project owner), connect Supabase once in the Supabase Database tab to publish globally without Firestore.
+              </p>
+            </div>
+          </div>
+          <div className="flex flex-wrap items-center gap-2 shrink-0">
+            <button
+              type="button"
+              onClick={() => setActiveAdminTab('supabase')}
+              className="px-3.5 py-2 rounded-xl bg-white hover:bg-indigo-100 text-indigo-800 border border-indigo-300 font-bold text-xs cursor-pointer"
+            >
+              Use Supabase Instead
+            </button>
+            <button
+              type="button"
+              onClick={handleSyncAllToFirestore}
+              disabled={isSyncingFirestore}
+              className="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs flex items-center gap-1.5 cursor-pointer shadow-xs disabled:opacity-60"
+            >
+              <RefreshCw className={`w-3.5 h-3.5 ${isSyncingFirestore ? 'animate-spin' : ''}`} />
+              <span>{isSyncingFirestore ? 'Syncing...' : 'Push All Content to Cloud'}</span>
+            </button>
+          </div>
+        </div>
+      ) : (
+        <div className="bg-amber-50 border-2 border-amber-300 rounded-2xl p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-sm">
+          <div className="flex items-start gap-3">
+            <div className="p-2 rounded-xl bg-amber-100 text-amber-700 shrink-0">
+              <ShieldAlert className="w-5 h-5" />
+            </div>
+            <div className="space-y-1">
+              <h3 className="text-sm font-black text-amber-950">
+                Action Required: Connect Supabase (or Verify Google Admin) to Publish Globally
+              </h3>
+              <p className="text-xs text-amber-900 leading-relaxed">
+                No cloud database is connected on this browser yet. Connect your Supabase URL &amp; Anon Key (recommended — works for all visitors without Firebase rule limits) or verify your Firebase Admin session so uploads appear to everyone.
+              </p>
+            </div>
+          </div>
+          <div className="flex flex-wrap items-center gap-2 shrink-0">
+            <button
+              type="button"
+              onClick={() => setActiveAdminTab('supabase')}
+              className="px-4 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs flex items-center gap-2 cursor-pointer shadow-md"
+            >
+              <Database className="w-4 h-4" />
+              <span>Connect Supabase</span>
+            </button>
+            <button
+              type="button"
+              onClick={handleVerifyGoogleAdmin}
+              disabled={isVerifyingGoogleAdmin}
+              className="px-4 py-2.5 rounded-xl bg-white hover:bg-amber-100 text-amber-900 border border-amber-300 font-bold text-xs flex items-center gap-2 cursor-pointer disabled:opacity-60"
+            >
+              {isVerifyingGoogleAdmin ? <RefreshCw className="w-4 h-4 animate-spin" /> : <ShieldCheck className="w-4 h-4" />}
+              <span>{isVerifyingGoogleAdmin ? 'Verifying...' : 'Verify Google Admin'}</span>
+            </button>
+          </div>
         </div>
       )}
 
@@ -3628,17 +3686,37 @@ export const AdminPanelView: React.FC = () => {
               </div>
             )}
 
-            {/* Quick SQL schema instructions */}
+              <div className="p-4 rounded-2xl bg-indigo-50 border border-indigo-200 text-xs text-indigo-950 space-y-2.5">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                  <span className="font-bold text-indigo-950 flex items-center gap-1.5">
+                    <Sparkles className="w-4 h-4 text-indigo-600 shrink-0" />
+                    <span>Use Supabase Without Firestore on booksboon.com (For All Visitors):</span>
+                  </span>
+                  <button
+                    type="button"
+                    onClick={copySupabaseEnvVars}
+                    className="px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-[11px] flex items-center gap-1.5 cursor-pointer shrink-0"
+                  >
+                    {copiedEnv ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
+                    <span>{copiedEnv ? 'Copied Env Vars!' : 'Copy VITE_SUPABASE Env Vars'}</span>
+                  </button>
+                </div>
+                <p className="text-[11px] text-indigo-900 leading-relaxed">
+                  Entering your URL &amp; Anon Key above saves them in this browser immediately. To make <strong>every visitor on booksboon.com</strong> automatically load Current Affairs, PDFs, Tests, Books &amp; Videos from Supabase with <strong>zero Firestore dependency</strong>, add <code>VITE_SUPABASE_URL</code> and <code>VITE_SUPABASE_ANON_KEY</code> in your Cloudflare Workers/Pages <strong>Build Environment Variables</strong> (or <code>.env</code> before running <code>npm run build</code>) and redeploy.
+                </p>
+              </div>
+
+              {/* Quick SQL schema instructions */}
             <div className="bg-slate-50 p-5 rounded-2xl border border-slate-200 text-xs text-slate-600 space-y-3 mt-4">
               <span className="font-bold text-slate-800 block text-sm flex items-center gap-2">
                 <Database className="w-4 h-4 text-indigo-600" />
-                <span>How to Fix Missing Columns &amp; Table Permissions in Supabase:</span>
+                <span>How to Setup / Fix Supabase Tables &amp; Permissions (1-Click):</span>
               </span>
               <ol className="list-decimal list-inside space-y-2 leading-relaxed">
-                <li>If you ever see <em>&quot;Could not find column in schema cache&quot;</em> or <em>&quot;permission denied for table exams&quot;</em>, click <strong>&quot;Copy 1-Click Fix &amp; Schema SQL&quot;</strong> above.</li>
+                <li>Click <strong>&quot;Copy 1-Click Fix &amp; Schema SQL&quot;</strong> above.</li>
                 <li>Open your Supabase Project dashboard and navigate to <strong>SQL Editor</strong> (<a href="https://supabase.com/dashboard/project/_/sql" target="_blank" rel="noopener noreferrer" className="text-indigo-600 underline font-semibold">supabase.com/dashboard/project/_/sql</a>).</li>
-                <li>Paste the copied script and click <strong>&quot;RUN&quot;</strong>. This script executes safe <code>ALTER TABLE ADD COLUMN IF NOT EXISTS</code> for all fields (<code>bannerImage</code>, <code>dateAdded</code>, <code>badge</code>, <code>associatedBookId</code>, etc.), grants permissions to the public/anon role on <code>exams</code>, and reloads PostgREST schema cache.</li>
-                <li>Return here and click <strong>&quot;Sync All Portal Data to Supabase Now&quot;</strong>. Sync will complete 100% cleanly! (The app also includes adaptive self-healing so missing columns are handled gracefully).</li>
+                <li>Paste the copied script and click <strong>&quot;RUN&quot;</strong>. This creates all tables (<code>current_affairs</code>, <code>free_pdfs</code>, <code>books</code>, <code>exams</code>, <code>test_series</code>, <code>video_lectures</code>, <code>orders</code>, <code>test_scores</code>, <code>app_settings</code>) and grants public read/write policies.</li>
+                <li>Return here, click <strong>&quot;Test &amp; Save Supabase Connection&quot;</strong>, then click <strong>&quot;Sync All Portal Data to Supabase Now&quot;</strong>.</li>
               </ol>
             </div>
 
