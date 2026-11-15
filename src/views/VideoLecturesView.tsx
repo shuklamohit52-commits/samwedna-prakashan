@@ -18,7 +18,7 @@ import { VIDEO_LECTURES } from '../data/mockData';
 import { VideoLecture } from '../types';
 
 export const VideoLecturesView: React.FC = () => {
-  const { showToast, setCurrentView } = useApp();
+  const { videoLectures, showToast, setCurrentView } = useApp();
   const [selectedSubject, setSelectedSubject] = useState<string>('All');
   const [activeLecture, setActiveLecture] = useState<VideoLecture | null>(null);
   const [playbackSpeed, setPlaybackSpeed] = useState<number>(1);
@@ -26,7 +26,8 @@ export const VideoLecturesView: React.FC = () => {
 
   const subjects = ['All', 'Indian Polity', 'Quantitative Aptitude', 'Static GK', 'Logical Reasoning', 'Current Affairs'];
 
-  const filteredLectures = VIDEO_LECTURES.filter(v => {
+  const sourceLectures = videoLectures && videoLectures.length > 0 ? videoLectures : VIDEO_LECTURES;
+  const filteredLectures = sourceLectures.filter(v => {
     if (selectedSubject !== 'All' && v.subject !== selectedSubject) return false;
     return true;
   });

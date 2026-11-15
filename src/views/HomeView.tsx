@@ -50,7 +50,8 @@ export const HomeView: React.FC = () => {
     testSeriesList,
     selectExamById,
     appLanguage,
-    examsCategories
+    examsCategories,
+    booksCatalog
   } = useApp();
 
   const [currentSlide, setCurrentSlide] = useState(0);
@@ -547,7 +548,7 @@ export const HomeView: React.FC = () => {
 
         {/* Books Grid with HD Gradient Borders */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-          {BOOKS_DATA.slice(0, 4).map((book) => (
+          {(booksCatalog && booksCatalog.length > 0 ? booksCatalog : BOOKS_DATA).slice(0, 4).map((book) => (
             <div 
               key={book.id}
               className="p-[1.5px] rounded-3xl bg-gradient-to-br from-amber-400/40 via-orange-500/20 to-indigo-500/30 hover:from-amber-400 hover:via-orange-500 hover:to-indigo-600 shadow-sm hover:shadow-2xl hover:shadow-amber-500/20 transition-all duration-300 flex flex-col justify-between group"

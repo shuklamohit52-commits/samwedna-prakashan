@@ -132,6 +132,33 @@
         "createdAt": { "type": "string", "maxLength": 64 }
       },
       "required": ["id", "title", "author", "category", "paperbackPrice"]
+    },
+    "exam": {
+      "title": "Exam",
+      "description": "Competitive examination hub entry with syllabus, pattern, and vacancy metadata",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "categoryId": { "type": "string", "maxLength": 64 },
+        "name": { "type": "string", "maxLength": 150 },
+        "fullName": { "type": "string", "maxLength": 300 },
+        "eligibility": { "type": "string", "maxLength": 500 },
+        "pattern": { "type": "string", "maxLength": 500 },
+        "totalMarks": { "type": "string", "maxLength": 100 },
+        "description": { "type": "string", "maxLength": 5000 },
+        "updatedAt": { "type": "string", "maxLength": 64 }
+      },
+      "required": ["id", "categoryId", "name", "fullName"]
+    },
+    "publicSetting": {
+      "title": "PublicSetting",
+      "description": "Publicly readable portal configuration such as Supabase public project URL/anonKey and soft-deleted item IDs",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "updatedAt": { "type": "string", "maxLength": 64 }
+      },
+      "required": ["id"]
     }
   },
   "firestore": {
@@ -166,6 +193,14 @@
     "/books/{bookId}": {
       "schema": { "$ref": "#/entities/book" },
       "description": "BooksBoon bookstore publications catalog readable by all visitors"
+    },
+    "/exams/{examId}": {
+      "schema": { "$ref": "#/entities/exam" },
+      "description": "Custom and updated government exam hubs readable by all visitors"
+    },
+    "/public_settings/{settingId}": {
+      "schema": { "$ref": "#/entities/publicSetting" },
+      "description": "Non-secret public portal configuration and deleted resource index readable by all visitors"
     }
   }
 }

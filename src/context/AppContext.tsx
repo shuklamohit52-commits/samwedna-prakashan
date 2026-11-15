@@ -28,8 +28,20 @@ import {
   INITIAL_ORDERS,
   INITIAL_STUDENTS
 } from '../data/mockData';
-import { ExamSubItem, ExamCategoryGroup, getExamById, getStoredExamsData, upsertExam, removeExam } from '../data/examsData';
-import { OrdersService, TestScoresService } from '../services/supabase';
+import { ExamSubItem, ExamCategoryGroup, getExamById, getStoredExamsData, upsertExam, removeExam, saveExamsDataToStorage } from '../data/examsData';
+import { 
+  OrdersService, 
+  TestScoresService,
+  CurrentAffairsService,
+  FreePdfsService,
+  BooksService,
+  ExamsService,
+  TestSeriesService,
+  VideoLecturesService,
+  isSupabaseConfigured,
+  saveSupabaseConfig,
+  initSupabaseClient
+} from '../services/supabase';
 import { 
   auth, 
   onAuthStateChanged, 
@@ -38,16 +50,27 @@ import {
   persistTestScoreToFirestore,
   saveCurrentAffairToFirestore,
   deleteCurrentAffairFromFirestore,
+  fetchCurrentAffairsFromFirestore,
   subscribeToCurrentAffairs,
   saveFreePdfToFirestore,
   deleteFreePdfFromFirestore,
+  fetchFreePdfsFromFirestore,
   subscribeToFreePdfs,
   saveTestSeriesToFirestore,
+  fetchTestSeriesFromFirestore,
   subscribeToTestSeries,
   saveVideoLectureToFirestore,
+  fetchVideoLecturesFromFirestore,
   subscribeToVideoLectures,
   saveBookToFirestore,
+  fetchBooksFromFirestore,
   subscribeToBooks,
+  saveExamToFirestore,
+  deleteExamFromFirestore,
+  subscribeToExams,
+  savePublicSettingToFirestore,
+  subscribeToPublicSetting,
+  extractTimestampMs,
   getAllUsersFromFirestore,
   getUserProfileFromFirestore,
   syncUserProfile,
@@ -136,6 +159,10 @@ interface AppContextType {
 
   // Auth & Admin & Students Directory
   isAdmin: boolean;
+  firebaseAuthEmail: string | null;
+  isFirebaseAdminReady: boolean;
+  syncAllLocalContentToCloud: () => Promise<{ ok: boolean; summary: string }>;
+  refreshPublicCloudData: () => Promise<void>;
   studentsList: UserProfile[];
   isRegisteredStudent: (email: string) => boolean;
   verifyStudentCredentials: (email: string, password: string) => { valid: boolean; reason?: 'not_found' | 'wrong_password' | 'admin' };
@@ -232,10 +259,268 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   }, [isAdmin]);
 
+  // Track actual Firebase Auth user (independent of local fallback user profile)
+  const [firebaseAuthUser, setFirebaseAuthUser] = useState<{
+    uid: string;
+    email: string | null;
+    emailVerified: boolean;
+  } | null>(() =>
+    auth.currentUser
+      ? {
+          uid: auth.currentUser.uid,
+          email: auth.currentUser.email,
+          emailVerified: auth.currentUser.emailVerified
+        }
+      : null
+  );
+
+  const firebaseAuthEmail = firebaseAuthUser?.email || null;
+  const isFirebaseAdminReady = Boolean(firebaseAuthEmail && isAuthorizedAdmin(firebaseAuthEmail));
+
+  // Remote cloud buffers so Firestore + Supabase + defaults merge cleanly without wiping each other
+  const remoteBuffersRef = React.useRef<{
+    caFirestore: CurrentAffairArticle[];
+    caSupabase: CurrentAffairArticle[];
+    pdfsFirestore: FreePdfResource[];
+    pdfsSupabase: FreePdfResource[];
+    testsFirestore: TestSeriesExam[];
+    testsSupabase: TestSeriesExam[];
+    videosFirestore: VideoLecture[];
+    videosSupabase: VideoLecture[];
+    booksFirestore: Book[];
+    booksSupabase: Book[];
+    examsFirestore: any[];
+    examsSupabase: any[];
+    deletedIds: { ca: string[]; pdfs: string[]; exams: string[] };
+  }>({
+    caFirestore: [],
+    caSupabase: [],
+    pdfsFirestore: [],
+    pdfsSupabase: [],
+    testsFirestore: [],
+    testsSupabase: [],
+    videosFirestore: [],
+    videosSupabase: [],
+    booksFirestore: [],
+    booksSupabase: [],
+    examsFirestore: [],
+    examsSupabase: [],
+    deletedIds: (() => {
+      try {
+        const raw = localStorage.getItem('samwedna_deleted_ids');
+        if (raw) return JSON.parse(raw);
+      } catch {
+        // ignore
+      }
+      return { ca: [], pdfs: [], exams: [] };
+    })()
+  });
+
+  const getCreationRank = (item: { id?: string; createdAt?: number | string }): number => {
+    if (typeof item.createdAt === 'number' && !Number.isNaN(item.createdAt) && item.createdAt > 0) {
+      return item.createdAt;
+    }
+    if (typeof item.createdAt === 'string') {
+      const parsed = Date.parse(item.createdAt);
+      if (!Number.isNaN(parsed) && parsed > 0) return parsed;
+    }
+    if (item.id) {
+      const match = item.id.match(/-(\d{12,14})$/);
+      if (match) {
+        const n = Number(match[1]);
+        if (!Number.isNaN(n)) return n;
+      }
+    }
+    return 0;
+  };
+
+  const mergeAndSortDatasets = <T extends { id: string; createdAt?: number | string }>(
+    defaults: T[],
+    currentLocal: T[],
+    supabaseItems: T[],
+    firestoreItems: T[],
+    deletedIds: string[]
+  ): T[] => {
+    const deletedSet = new Set(deletedIds);
+    const defaultIds = new Set(defaults.map(d => d.id));
+    const map = new Map<string, T>();
+
+    defaults.forEach(item => {
+      if (!deletedSet.has(item.id)) map.set(item.id, item);
+    });
+
+    // Preserve locally-created non-default items so admin drafts aren't lost prior to cloud sync
+    currentLocal.forEach(item => {
+      if (!deletedSet.has(item.id) && (!defaultIds.has(item.id) || getCreationRank(item) > 0)) {
+        map.set(item.id, item);
+      }
+    });
+
+    // Remote Supabase overrides local/defaults
+    supabaseItems.forEach(item => {
+      if (item && item.id && !deletedSet.has(item.id)) {
+        map.set(item.id, item);
+      }
+    });
+
+    // Remote Firestore overrides Supabase/local/defaults
+    firestoreItems.forEach(item => {
+      if (item && item.id && !deletedSet.has(item.id)) {
+        map.set(item.id, item);
+      }
+    });
+
+    const combined = Array.from(map.values());
+    return combined.sort((a, b) => {
+      const rankA = getCreationRank(a);
+      const rankB = getCreationRank(b);
+      if (rankA !== rankB) {
+        return rankB - rankA;
+      }
+      return 0;
+    });
+  };
+
+  const mergeExamCategories = (baseCategories: ExamCategoryGroup[], remoteFlatExams: any[], deletedIds: string[]): ExamCategoryGroup[] => {
+    const deletedSet = new Set(deletedIds);
+    const cloned: ExamCategoryGroup[] = baseCategories.map(cat => ({
+      ...cat,
+      exams: cat.exams.filter(ex => !deletedSet.has(ex.id))
+    }));
+
+    remoteFlatExams.forEach(raw => {
+      if (!raw || !raw.id || deletedSet.has(raw.id)) return;
+      const catId = raw.categoryId || raw.category || 'ssc';
+      const examObj: ExamSubItem = {
+        id: raw.id,
+        name: raw.name,
+        hindiName: raw.hindiName || undefined,
+        fullName: raw.fullName || raw.name,
+        officialBoard: raw.officialBoard || undefined,
+        logoUrl: raw.logoUrl || undefined,
+        badge: raw.badge || undefined,
+        vacancies: raw.vacancies || undefined,
+        eligibility: raw.eligibility || 'As per official notification',
+        pattern: raw.pattern || 'CBT',
+        totalMarks: raw.totalMarks || '200 Marks',
+        negativeMarking: raw.negativeMarking || undefined,
+        description: raw.description || '',
+        hindiDescription: raw.hindiDescription || undefined,
+        syllabusHighlights: raw.syllabusHighlights,
+        recommendedBookIds: raw.recommendedBookIds,
+        mockTestIds: raw.mockTestIds,
+        freePdfIds: raw.freePdfIds,
+        gradientBorder: raw.gradientBorder || 'from-blue-600 via-indigo-600 to-purple-600'
+      };
+
+      // Remove existing copy from any category before inserting updated one
+      cloned.forEach(c => {
+        c.exams = c.exams.filter(ex => ex.id !== examObj.id);
+      });
+      const targetGroup = cloned.find(c => c.id === catId) || cloned[0];
+      if (targetGroup) {
+        targetGroup.exams.unshift(examObj);
+      }
+    });
+
+    return cloned;
+  };
+
+  const recomputeMergedState = () => {
+    const buf = remoteBuffersRef.current;
+
+    setCurrentAffairs(prev => {
+      const merged = mergeAndSortDatasets(DAILY_CURRENT_AFFAIRS, prev, buf.caSupabase, buf.caFirestore, buf.deletedIds.ca);
+      try { localStorage.setItem('samwedna_ca', JSON.stringify(merged)); } catch { /* ignore */ }
+      return merged;
+    });
+
+    setFreePdfs(prev => {
+      const merged = mergeAndSortDatasets(FREE_PDFS_DATA, prev, buf.pdfsSupabase, buf.pdfsFirestore, buf.deletedIds.pdfs);
+      try { localStorage.setItem('samwedna_pdfs', JSON.stringify(merged)); } catch { /* ignore */ }
+      return merged;
+    });
+
+    setTestSeriesList(prev => {
+      const merged = mergeAndSortDatasets(TEST_SERIES_DATA, prev, buf.testsSupabase, buf.testsFirestore, []);
+      try { localStorage.setItem('samwedna_tests', JSON.stringify(merged)); } catch { /* ignore */ }
+      return merged;
+    });
+
+    setVideoLectures(prev => {
+      const merged = mergeAndSortDatasets(VIDEO_LECTURES, prev, buf.videosSupabase, buf.videosFirestore, []);
+      try { localStorage.setItem('samwedna_videos', JSON.stringify(merged)); } catch { /* ignore */ }
+      return merged;
+    });
+
+    setBooksCatalog(prev => {
+      const merged = mergeAndSortDatasets(BOOKS_DATA, prev, buf.booksSupabase, buf.booksFirestore, []);
+      try { localStorage.setItem('samwedna_books', JSON.stringify(merged)); } catch { /* ignore */ }
+      return merged;
+    });
+
+    if (buf.examsSupabase.length > 0 || buf.examsFirestore.length > 0 || buf.deletedIds.exams.length > 0) {
+      setExamsCategories(prev => {
+        const merged = mergeExamCategories(prev, [...buf.examsSupabase, ...buf.examsFirestore], buf.deletedIds.exams);
+        saveExamsDataToStorage(merged);
+        return merged;
+      });
+    }
+  };
+
+  const fetchAllFromSupabase = async () => {
+    if (!isSupabaseConfigured()) return;
+    try {
+      const [ca, pdfs, tests, videos, books, exams] = await Promise.all([
+        CurrentAffairsService.fetchAll(),
+        FreePdfsService.fetchAll(),
+        TestSeriesService.fetchAll(),
+        VideoLecturesService.fetchAll(),
+        BooksService.fetchAll(),
+        ExamsService.fetchAll()
+      ]);
+      remoteBuffersRef.current.caSupabase = ca || [];
+      remoteBuffersRef.current.pdfsSupabase = pdfs || [];
+      remoteBuffersRef.current.testsSupabase = tests || [];
+      remoteBuffersRef.current.videosSupabase = videos || [];
+      remoteBuffersRef.current.booksSupabase = books || [];
+      remoteBuffersRef.current.examsSupabase = exams || [];
+      recomputeMergedState();
+    } catch (err) {
+      console.warn('Supabase public fetch notice:', err);
+    }
+  };
+
+  const refreshPublicCloudData = async () => {
+    try {
+      const [ca, pdfs, tests, videos, books] = await Promise.all([
+        fetchCurrentAffairsFromFirestore(),
+        fetchFreePdfsFromFirestore(),
+        fetchTestSeriesFromFirestore(),
+        fetchVideoLecturesFromFirestore(),
+        fetchBooksFromFirestore()
+      ]);
+      if (ca) remoteBuffersRef.current.caFirestore = ca;
+      if (pdfs) remoteBuffersRef.current.pdfsFirestore = pdfs;
+      if (tests) remoteBuffersRef.current.testsFirestore = tests;
+      if (videos) remoteBuffersRef.current.videosFirestore = videos;
+      if (books) remoteBuffersRef.current.booksFirestore = books;
+      recomputeMergedState();
+    } catch (err) {
+      console.warn('Firestore initial fetch notice:', err);
+    }
+    await fetchAllFromSupabase();
+  };
+
   // Listen to Firebase Auth state changes with remote profile synchronization
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
       if (firebaseUser) {
+        setFirebaseAuthUser({
+          uid: firebaseUser.uid,
+          email: firebaseUser.email,
+          emailVerified: firebaseUser.emailVerified
+        });
         const userEmail = firebaseUser.email || '';
         const userIsAdmin = isAuthorizedAdmin(userEmail);
         
@@ -269,55 +554,69 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         } catch (e) {
           console.error(e);
         }
+      } else {
+        setFirebaseAuthUser(null);
       }
     });
     return () => unsubscribe();
   }, []);
 
-  // Real-time Firestore subscriptions for live reflections across all visitors
+  // Real-time Firestore + Supabase subscriptions for live reflections across ALL visitors (logged in or logged out)
   useEffect(() => {
+    // Perform immediate one-shot fetch for fast cold-start rendering
+    refreshPublicCloudData();
+
     const unsubCa = subscribeToCurrentAffairs((articles) => {
-      if (articles && articles.length > 0) {
-        setCurrentAffairs(articles);
-        try {
-          localStorage.setItem('samwedna_ca', JSON.stringify(articles));
-        } catch (e) { console.error(e); }
-      }
+      remoteBuffersRef.current.caFirestore = articles || [];
+      recomputeMergedState();
     });
 
     const unsubPdfs = subscribeToFreePdfs((pdfs) => {
-      if (pdfs && pdfs.length > 0) {
-        setFreePdfs(pdfs);
-        try {
-          localStorage.setItem('samwedna_pdfs', JSON.stringify(pdfs));
-        } catch (e) { console.error(e); }
-      }
+      remoteBuffersRef.current.pdfsFirestore = pdfs || [];
+      recomputeMergedState();
     });
 
     const unsubTests = subscribeToTestSeries((tests) => {
-      if (tests && tests.length > 0) {
-        setTestSeriesList(tests);
-        try {
-          localStorage.setItem('samwedna_tests', JSON.stringify(tests));
-        } catch (e) { console.error(e); }
-      }
+      remoteBuffersRef.current.testsFirestore = tests || [];
+      recomputeMergedState();
     });
 
     const unsubVideos = subscribeToVideoLectures((videos) => {
-      if (videos && videos.length > 0) {
-        setVideoLectures(videos);
-        try {
-          localStorage.setItem('samwedna_videos', JSON.stringify(videos));
-        } catch (e) { console.error(e); }
-      }
+      remoteBuffersRef.current.videosFirestore = videos || [];
+      recomputeMergedState();
     });
 
     const unsubBooks = subscribeToBooks((books) => {
-      if (books && books.length > 0) {
-        setBooksCatalog(books);
+      remoteBuffersRef.current.booksFirestore = books || [];
+      recomputeMergedState();
+    });
+
+    const unsubExams = subscribeToExams((exams) => {
+      remoteBuffersRef.current.examsFirestore = exams || [];
+      recomputeMergedState();
+    });
+
+    const unsubDeleted = subscribeToPublicSetting('deleted_items', (data) => {
+      if (data) {
+        remoteBuffersRef.current.deletedIds = {
+          ca: Array.isArray(data.ca) ? data.ca : [],
+          pdfs: Array.isArray(data.pdfs) ? data.pdfs : [],
+          exams: Array.isArray(data.exams) ? data.exams : []
+        };
         try {
-          localStorage.setItem('samwedna_books', JSON.stringify(books));
-        } catch (e) { console.error(e); }
+          localStorage.setItem('samwedna_deleted_ids', JSON.stringify(remoteBuffersRef.current.deletedIds));
+        } catch { /* ignore */ }
+        recomputeMergedState();
+      }
+    });
+
+    const unsubSupabasePublic = subscribeToPublicSetting('supabase', (data) => {
+      if (data && typeof data.url === 'string' && typeof data.anonKey === 'string' && data.url.startsWith('https://')) {
+        if (!isSupabaseConfigured()) {
+          saveSupabaseConfig(data.url, data.anonKey);
+          initSupabaseClient(data.url, data.anonKey);
+          fetchAllFromSupabase();
+        }
       }
     });
 
@@ -343,6 +642,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       unsubTests && unsubTests();
       unsubVideos && unsubVideos();
       unsubBooks && unsubBooks();
+      unsubExams && unsubExams();
+      unsubDeleted && unsubDeleted();
+      unsubSupabasePublic && unsubSupabasePublic();
     };
   }, []);
 
@@ -534,6 +836,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   });
 
   const selectExamById = (examId: string) => {
+    for (const group of examsCategories) {
+      const foundInState = group.exams.find(e => e.id === examId);
+      if (foundInState) {
+        setSelectedExam(foundInState);
+        setCurrentView('exam-detail');
+        return;
+      }
+    }
     const found = getExamById(examId);
     if (found) {
       setSelectedExam(found);
@@ -541,21 +851,38 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   };
 
-  const addOrUpdateExam = (categoryId: string, exam: ExamSubItem) => {
+  const addOrUpdateExam = async (categoryId: string, exam: ExamSubItem) => {
     const updated = upsertExam(categoryId, exam);
     setExamsCategories([...updated]);
     if (selectedExam && selectedExam.id === exam.id) {
       setSelectedExam(exam);
     }
-    showToast(`Exam "${exam.name}" updated successfully!`, 'success');
+    const [fbRes, sbRes] = await Promise.all([
+      saveExamToFirestore(categoryId, exam),
+      ExamsService.upsert({ ...exam, category: categoryId })
+    ]);
+    if (fbRes.ok || sbRes.success) {
+      showToast(`Exam "${exam.name}" synced live across website!`, 'success');
+    } else {
+      showToast(`Exam "${exam.name}" saved locally only (${fbRes.error || sbRes.message || 'Cloud auth needed'}).`, 'error');
+    }
   };
 
-  const deleteExamFromState = (examId: string) => {
+  const deleteExamFromState = async (examId: string) => {
     const updated = removeExam(examId);
     setExamsCategories([...updated]);
     if (selectedExam && selectedExam.id === examId) {
       setSelectedExam(getExamById('ssc-cgl') || null);
     }
+    if (!remoteBuffersRef.current.deletedIds.exams.includes(examId)) {
+      remoteBuffersRef.current.deletedIds.exams = [...remoteBuffersRef.current.deletedIds.exams, examId];
+      try { localStorage.setItem('samwedna_deleted_ids', JSON.stringify(remoteBuffersRef.current.deletedIds)); } catch { /* ignore */ }
+    }
+    await Promise.all([
+      deleteExamFromFirestore(examId),
+      ExamsService.delete(examId),
+      savePublicSettingToFirestore('deleted_items', remoteBuffersRef.current.deletedIds)
+    ]);
     showToast('Exam removed successfully', 'info');
   };
 
@@ -741,25 +1068,51 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     showToast(exists ? 'PDF removed from bookmarks' : 'PDF saved to your Student Library!', 'success');
   };
 
-  // Admin creators & managers with Firestore synchronization
+  // Admin creators & managers with dual Firestore + Supabase cloud synchronization
   const addCurrentAffair = async (article: CurrentAffairArticle) => {
-    const updated = [article, ...currentAffairs.filter(a => a.id !== article.id)];
+    const enriched: CurrentAffairArticle = {
+      ...article,
+      createdAt: article.createdAt || Date.now()
+    };
+    const updated = [enriched, ...currentAffairs.filter(a => a.id !== enriched.id)];
     setCurrentAffairs(updated);
     try {
       localStorage.setItem('samwedna_ca', JSON.stringify(updated));
     } catch (e) { console.error(e); }
-    await saveCurrentAffairToFirestore(article);
-    showToast('Daily Current Affairs article published and synced to website!', 'success');
+
+    const [fbRes, sbRes] = await Promise.all([
+      saveCurrentAffairToFirestore(enriched),
+      CurrentAffairsService.upsert(enriched)
+    ]);
+
+    if (fbRes.ok || sbRes.success) {
+      showToast('Current Affairs published & synced live to ALL users and visitors!', 'success');
+    } else {
+      showToast(`Saved on this device only — NOT visible to others yet! ${fbRes.error || sbRes.message || ''}`, 'error');
+    }
   };
 
   const updateCurrentAffair = async (article: CurrentAffairArticle) => {
-    const updated = currentAffairs.map(a => a.id === article.id ? article : a);
+    const enriched: CurrentAffairArticle = {
+      ...article,
+      createdAt: article.createdAt || Date.now()
+    };
+    const updated = currentAffairs.map(a => a.id === enriched.id ? enriched : a);
     setCurrentAffairs(updated);
     try {
       localStorage.setItem('samwedna_ca', JSON.stringify(updated));
     } catch (e) { console.error(e); }
-    await saveCurrentAffairToFirestore(article);
-    showToast('Current affairs article updated and synced across website!', 'success');
+
+    const [fbRes, sbRes] = await Promise.all([
+      saveCurrentAffairToFirestore(enriched),
+      CurrentAffairsService.upsert(enriched)
+    ]);
+
+    if (fbRes.ok || sbRes.success) {
+      showToast('Current Affairs article updated & synced live for everyone!', 'success');
+    } else {
+      showToast(`Updated locally only — NOT visible to others yet! ${fbRes.error || sbRes.message || ''}`, 'error');
+    }
   };
 
   const deleteCurrentAffair = async (id: string) => {
@@ -768,18 +1121,46 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     try {
       localStorage.setItem('samwedna_ca', JSON.stringify(updated));
     } catch (e) { console.error(e); }
-    await deleteCurrentAffairFromFirestore(id);
-    showToast('Current affairs article deleted successfully', 'info');
+
+    if (!remoteBuffersRef.current.deletedIds.ca.includes(id)) {
+      remoteBuffersRef.current.deletedIds.ca = [...remoteBuffersRef.current.deletedIds.ca, id];
+      try { localStorage.setItem('samwedna_deleted_ids', JSON.stringify(remoteBuffersRef.current.deletedIds)); } catch { /* ignore */ }
+    }
+
+    const [fbRes, sbRes] = await Promise.all([
+      deleteCurrentAffairFromFirestore(id),
+      CurrentAffairsService.delete(id),
+      savePublicSettingToFirestore('deleted_items', remoteBuffersRef.current.deletedIds)
+    ]);
+
+    if (fbRes.ok || sbRes.success) {
+      showToast('Current affairs article deleted across website', 'info');
+    } else {
+      showToast(`Deleted locally only (${fbRes.error || 'Connect Google Admin Session to remove globally'}).`, 'error');
+    }
   };
 
   const addFreePdf = async (pdf: FreePdfResource) => {
-    const updated = [pdf, ...freePdfs.filter(p => p.id !== pdf.id)];
+    const enriched: FreePdfResource = {
+      ...pdf,
+      createdAt: pdf.createdAt || Date.now()
+    };
+    const updated = [enriched, ...freePdfs.filter(p => p.id !== enriched.id)];
     setFreePdfs(updated);
     try {
       localStorage.setItem('samwedna_pdfs', JSON.stringify(updated));
     } catch (e) { console.error(e); }
-    await saveFreePdfToFirestore(pdf);
-    showToast('Free PDF study material uploaded and synced across website!', 'success');
+
+    const [fbRes, sbRes] = await Promise.all([
+      saveFreePdfToFirestore(enriched),
+      FreePdfsService.upsert(enriched)
+    ]);
+
+    if (fbRes.ok || sbRes.success) {
+      showToast('Free PDF uploaded & synced live for ALL website visitors!', 'success');
+    } else {
+      showToast(`PDF saved locally only — NOT visible to others yet! ${fbRes.error || sbRes.message || ''}`, 'error');
+    }
   };
 
   const deleteFreePdf = async (id: string) => {
@@ -788,8 +1169,23 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     try {
       localStorage.setItem('samwedna_pdfs', JSON.stringify(updated));
     } catch (e) { console.error(e); }
-    await deleteFreePdfFromFirestore(id);
-    showToast('PDF study resource deleted successfully', 'info');
+
+    if (!remoteBuffersRef.current.deletedIds.pdfs.includes(id)) {
+      remoteBuffersRef.current.deletedIds.pdfs = [...remoteBuffersRef.current.deletedIds.pdfs, id];
+      try { localStorage.setItem('samwedna_deleted_ids', JSON.stringify(remoteBuffersRef.current.deletedIds)); } catch { /* ignore */ }
+    }
+
+    const [fbRes, sbRes] = await Promise.all([
+      deleteFreePdfFromFirestore(id),
+      FreePdfsService.delete(id),
+      savePublicSettingToFirestore('deleted_items', remoteBuffersRef.current.deletedIds)
+    ]);
+
+    if (fbRes.ok || sbRes.success) {
+      showToast('PDF study resource deleted across website', 'info');
+    } else {
+      showToast(`Deleted locally only (${fbRes.error || 'Connect Google Admin Session to remove globally'}).`, 'error');
+    }
   };
 
   const addStudyMaterial = (item: StudyMaterialItem) => {
@@ -800,33 +1196,126 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const addVideoLecture = async (lecture: VideoLecture) => {
-    const updated = [lecture, ...videoLectures.filter(v => v.id !== lecture.id)];
+    const enriched: VideoLecture = {
+      ...lecture,
+      createdAt: lecture.createdAt || Date.now()
+    };
+    const updated = [enriched, ...videoLectures.filter(v => v.id !== enriched.id)];
     setVideoLectures(updated);
     try {
       localStorage.setItem('samwedna_videos', JSON.stringify(updated));
     } catch (e) { console.error(e); }
-    await saveVideoLectureToFirestore(lecture);
-    showToast('Video Lecture link uploaded and synced across website!', 'success');
+
+    const [fbRes, sbRes] = await Promise.all([
+      saveVideoLectureToFirestore(enriched),
+      VideoLecturesService.upsert(enriched)
+    ]);
+
+    if (fbRes.ok || sbRes.success) {
+      showToast('Video Lecture synced live for ALL website visitors!', 'success');
+    } else {
+      showToast(`Video saved locally only — NOT visible to others yet! ${fbRes.error || sbRes.message || ''}`, 'error');
+    }
   };
 
   const addTestSeries = async (test: TestSeriesExam) => {
-    const updated = [test, ...testSeriesList.filter(t => t.id !== test.id)];
+    const enriched: TestSeriesExam = {
+      ...test,
+      createdAt: test.createdAt || Date.now()
+    };
+    const updated = [enriched, ...testSeriesList.filter(t => t.id !== enriched.id)];
     setTestSeriesList(updated);
     try {
       localStorage.setItem('samwedna_tests', JSON.stringify(updated));
     } catch (e) { console.error(e); }
-    await saveTestSeriesToFirestore(test);
-    showToast(`CBT Mock Test "${test.title}" created and synced across website!`, 'success');
+
+    const [fbRes, sbRes] = await Promise.all([
+      saveTestSeriesToFirestore(enriched),
+      TestSeriesService.upsert(enriched)
+    ]);
+
+    if (fbRes.ok || sbRes.success) {
+      showToast(`CBT Mock Test "${enriched.title}" synced live for everyone!`, 'success');
+    } else {
+      showToast(`Test saved locally only — NOT visible to others yet! ${fbRes.error || sbRes.message || ''}`, 'error');
+    }
   };
 
   const addBookToCatalog = async (book: Book) => {
-    const updated = [book, ...booksCatalog.filter(b => b.id !== book.id)];
+    const enriched: Book = {
+      ...book,
+      createdAt: book.createdAt || Date.now()
+    };
+    const updated = [enriched, ...booksCatalog.filter(b => b.id !== enriched.id)];
     setBooksCatalog(updated);
     try {
       localStorage.setItem('samwedna_books', JSON.stringify(updated));
     } catch (e) { console.error(e); }
-    await saveBookToFirestore(book);
-    showToast(`Book/Magazine "${book.title}" added and synced to BooksBoon store!`, 'success');
+
+    const [fbRes, sbRes] = await Promise.all([
+      saveBookToFirestore(enriched),
+      BooksService.upsert(enriched)
+    ]);
+
+    if (fbRes.ok || sbRes.success) {
+      showToast(`Book "${enriched.title}" synced live to BooksBoon store!`, 'success');
+    } else {
+      showToast(`Book saved locally only — NOT visible to others yet! ${fbRes.error || sbRes.message || ''}`, 'error');
+    }
+  };
+
+  const syncAllLocalContentToCloud = async (): Promise<{ ok: boolean; summary: string }> => {
+    let syncedCount = 0;
+    const errors: string[] = [];
+
+    for (const art of currentAffairs) {
+      const res = await saveCurrentAffairToFirestore({
+        ...art,
+        createdAt: art.createdAt || extractTimestampMs(art) || Date.now()
+      });
+      if (res.ok) syncedCount++;
+      else if (res.error && !errors.includes(res.error)) errors.push(res.error);
+    }
+    for (const pdf of freePdfs) {
+      const res = await saveFreePdfToFirestore({
+        ...pdf,
+        createdAt: pdf.createdAt || extractTimestampMs(pdf) || Date.now()
+      });
+      if (res.ok) syncedCount++;
+      else if (res.error && !errors.includes(res.error)) errors.push(res.error);
+    }
+    for (const test of testSeriesList) {
+      const res = await saveTestSeriesToFirestore({
+        ...test,
+        createdAt: test.createdAt || extractTimestampMs(test) || Date.now()
+      });
+      if (res.ok) syncedCount++;
+      else if (res.error && !errors.includes(res.error)) errors.push(res.error);
+    }
+    for (const vid of videoLectures) {
+      const res = await saveVideoLectureToFirestore({
+        ...vid,
+        createdAt: vid.createdAt || extractTimestampMs(vid) || Date.now()
+      });
+      if (res.ok) syncedCount++;
+      else if (res.error && !errors.includes(res.error)) errors.push(res.error);
+    }
+    for (const book of booksCatalog) {
+      const res = await saveBookToFirestore({
+        ...book,
+        createdAt: book.createdAt || extractTimestampMs(book) || Date.now()
+      });
+      if (res.ok) syncedCount++;
+      else if (res.error && !errors.includes(res.error)) errors.push(res.error);
+    }
+
+    if (errors.length > 0 && syncedCount === 0) {
+      return { ok: false, summary: errors[0] };
+    }
+    return {
+      ok: true,
+      summary: `Synced ${syncedCount} items live to Firebase cloud for all visitors${errors.length > 0 ? ` (${errors.length} warnings: ${errors[0]})` : '!'}`
+    };
   };
 
   const downloadBookToLibrary = (book: Book): { success: boolean; reason?: string } => {
@@ -1128,6 +1617,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
         // Auth & Admin & Students Directory
         isAdmin,
+        firebaseAuthEmail,
+        isFirebaseAdminReady,
+        syncAllLocalContentToCloud,
+        refreshPublicCloudData,
         studentsList,
         isRegisteredStudent,
         verifyStudentCredentials,

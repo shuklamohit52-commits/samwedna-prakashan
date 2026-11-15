@@ -50,6 +50,7 @@ import {
   getSupabaseSchemaSql,
   syncAllDataToSupabase
 } from '../services/supabase';
+import { signInWithGoogle, savePublicSettingToFirestore } from '../services/firebase';
 import { ExamLogo } from '../components/ExamLogo';
 import { ExamSubItem } from '../data/examsData';
 import { 
@@ -68,6 +69,10 @@ export const AdminPanelView: React.FC = () => {
   const { 
     user,
     isAdmin,
+    firebaseAuthEmail,
+    isFirebaseAdminReady,
+    syncAllLocalContentToCloud,
+    refreshPublicCloudData,
     setCurrentView,
     logoutUser,
     adminAuthenticated, 
@@ -96,6 +101,9 @@ export const AdminPanelView: React.FC = () => {
     deleteExamFromState,
     showToast 
   } = useApp();
+
+  const [isVerifyingGoogleAdmin, setIsVerifyingGoogleAdmin] = useState(false);
+  const [isSyncingFirestore, setIsSyncingFirestore] = useState(false);
 
   const [adminPasscode, setAdminPasscode] = useState('');
   const [activeAdminTab, setActiveAdminTab] = useState<'analytics' | 'students' | 'current-affairs' | 'quiz' | 'pdfs' | 'videos' | 'books' | 'exams' | 'supabase'>('analytics');
@@ -262,6 +270,30 @@ export const AdminPanelView: React.FC = () => {
     }
   };
 
+  const handleVerifyGoogleAdmin = async () => {
+    setIsVerifyingGoogleAdmin(true);
+    const { user: fbUser, error } = await signInWithGoogle();
+    if (error || !fbUser) {
+      setIsVerifyingGoogleAdmin(false);
+      showToast(error || 'Google verification cancelled.', 'error');
+      return;
+    }
+    const syncRes = await syncAllLocalContentToCloud();
+    setIsVerifyingGoogleAdmin(false);
+    if (syncRes.ok) {
+      showToast(`Verified (${fbUser.email}) & ${syncRes.summary}`, 'success');
+    } else {
+      showToast(`Verified as ${fbUser.email}, but sync reported: ${syncRes.summary}`, 'error');
+    }
+  };
+
+  const handleSyncAllToFirestore = async () => {
+    setIsSyncingFirestore(true);
+    const res = await syncAllLocalContentToCloud();
+    setIsSyncingFirestore(false);
+    showToast(res.summary, res.ok ? 'success' : 'error');
+  };
+
   const handleTestSupabase = async () => {
     setIsTestingSupabase(true);
     setSupabaseStatusMsg(null);
@@ -270,6 +302,8 @@ export const AdminPanelView: React.FC = () => {
     setSupabaseStatusMsg(result);
     if (result.success) {
       saveSupabaseConfig(supabaseUrl, supabaseKey);
+      savePublicSettingToFirestore('supabase', { url: supabaseUrl.trim(), anonKey: supabaseKey.trim() }).catch(() => {});
+      refreshPublicCloudData().catch(() => {});
       showToast(result.message, 'success');
     } else {
       showToast(result.message, 'error');
@@ -277,7 +311,7 @@ export const AdminPanelView: React.FC = () => {
   };
 
   // Handlers for submitting new items
-  const handleCreateQuiz = (e: React.FormEvent) => {
+  const handleCreateQuiz = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!quizTitle.trim()) {
       showToast('Please provide a test title', 'error');
@@ -319,8 +353,7 @@ export const AdminPanelView: React.FC = () => {
       questions: [newQuestion]
     };
 
-    addTestSeries(newTest);
-    showToast(`Published CBT Test "${quizTitle}" successfully!`, 'success');
+    await addTestSeries(newTest);
     setQuizTitle('');
     setQuizHindiTitle('');
     setQuizQText('');
@@ -394,7 +427,7 @@ export const AdminPanelView: React.FC = () => {
     setCaMcqHindiExp('');
   };
 
-  const handleCreateCurrentAffair = (e: React.FormEvent) => {
+  const handleCreateCurrentAffair = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!caTitle.trim() || !caSummary.trim()) {
       showToast('Please fill title and summary', 'error');
@@ -442,12 +475,10 @@ export const AdminPanelView: React.FC = () => {
     };
 
     if (editingCaId) {
-      updateCurrentAffair(articleData);
+      await updateCurrentAffair(articleData);
       setEditingCaId(null);
-      showToast('Updated Current Affairs article and banner!', 'success');
     } else {
-      addCurrentAffair(articleData);
-      showToast('Published Daily Current Affairs article!', 'success');
+      await addCurrentAffair(articleData);
     }
 
     setCaTitle('');
@@ -566,7 +597,33 @@ export const AdminPanelView: React.FC = () => {
     reader.readAsDataURL(file);
   };
 
-  const handleCaImageFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const compressImageDataUrl = (file: File, maxWidth = 1100): Promise<string> => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onerror = () => reject(new Error('Failed to read image'));
+      reader.onload = () => {
+        const raw = typeof reader.result === 'string' ? reader.result : '';
+        if (!raw) return reject(new Error('Empty image data'));
+        const img = new Image();
+        img.onerror = () => resolve(raw);
+        img.onload = () => {
+          const scale = img.width > maxWidth ? maxWidth / img.width : 1;
+          const canvas = document.createElement('canvas');
+          canvas.width = Math.round(img.width * scale);
+          canvas.height = Math.round(img.height * scale);
+          const ctx = canvas.getContext('2d');
+          if (!ctx) return resolve(raw);
+          ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+          const compressed = canvas.toDataURL('image/jpeg', 0.78);
+          resolve(compressed.length < raw.length ? compressed : raw);
+        };
+        img.src = raw;
+      };
+      reader.readAsDataURL(file);
+    });
+  };
+
+  const handleCaImageFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
@@ -576,17 +633,16 @@ export const AdminPanelView: React.FC = () => {
     }
 
     setCaImageFileName(file.name);
-    const reader = new FileReader();
-    reader.onload = () => {
-      if (typeof reader.result === 'string') {
-        setCaImageUrl(reader.result);
-        showToast(`Topic banner "${file.name}" loaded from device`, 'success');
-      }
-    };
-    reader.readAsDataURL(file);
+    try {
+      const optimized = await compressImageDataUrl(file);
+      setCaImageUrl(optimized);
+      showToast(`Topic banner "${file.name}" optimized & ready for cloud broadcast`, 'success');
+    } catch {
+      showToast('Failed to load image file from device', 'error');
+    }
   };
 
-  const handleBookCoverFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleBookCoverFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
@@ -596,17 +652,16 @@ export const AdminPanelView: React.FC = () => {
     }
 
     setBookCoverFileName(file.name);
-    const reader = new FileReader();
-    reader.onload = () => {
-      if (typeof reader.result === 'string') {
-        setBookCoverUrl(reader.result);
-        showToast(`Book cover "${file.name}" loaded from device`, 'success');
-      }
-    };
-    reader.readAsDataURL(file);
+    try {
+      const optimized = await compressImageDataUrl(file, 900);
+      setBookCoverUrl(optimized);
+      showToast(`Book cover "${file.name}" optimized & ready`, 'success');
+    } catch {
+      showToast('Failed to load book cover from device', 'error');
+    }
   };
 
-  const handleCreatePdf = (e: React.FormEvent) => {
+  const handleCreatePdf = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!pdfTitle.trim()) {
       showToast('Please enter PDF title', 'error');
@@ -631,8 +686,7 @@ export const AdminPanelView: React.FC = () => {
       isTrending: true
     };
 
-    addFreePdf(newPdf);
-    showToast(`Published Free PDF "${pdfTitle}"!`, 'success');
+    await addFreePdf(newPdf);
     setPdfTitle('');
     setPdfHindiTitle('');
     setPdfSubject('');
@@ -643,7 +697,7 @@ export const AdminPanelView: React.FC = () => {
     setPdfUrl('/samples/sample.pdf');
   };
 
-  const handleCreateVideo = (e: React.FormEvent) => {
+  const handleCreateVideo = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!vidTitle.trim()) {
       showToast('Please enter video title', 'error');
@@ -666,8 +720,7 @@ export const AdminPanelView: React.FC = () => {
       youtubeId: vidYoutubeId || undefined
     };
 
-    addVideoLecture(newVid);
-    showToast(`Published Video Lecture "${vidTitle}"!`, 'success');
+    await addVideoLecture(newVid);
     setVidTitle('');
     setVidHindiTitle('');
     setVidSubject('');
@@ -676,7 +729,7 @@ export const AdminPanelView: React.FC = () => {
     setVidHindiDesc('');
   };
 
-  const handleCreateBook = (e: React.FormEvent) => {
+  const handleCreateBook = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!bookTitle.trim()) {
       showToast('Please enter book title', 'error');
@@ -712,8 +765,7 @@ export const AdminPanelView: React.FC = () => {
       stockCount: parseInt(bookStock) || 100
     };
 
-    addBookToCatalog(newBook);
-    showToast(`Added book "${bookTitle}" to BooksBoon.com!`, 'success');
+    await addBookToCatalog(newBook);
     setBookTitle('');
     setBookHindiTitle('');
     setBookAuthor('');
@@ -787,7 +839,7 @@ export const AdminPanelView: React.FC = () => {
     }
   };
 
-  const handleCreateOrUpdateExam = (e: React.FormEvent) => {
+  const handleCreateOrUpdateExam = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!examName.trim() || !examFullName.trim()) {
       showToast('Please provide Exam Name and Official Board / Full Name', 'error');
@@ -824,8 +876,7 @@ export const AdminPanelView: React.FC = () => {
       gradientBorder: 'from-blue-600 via-indigo-600 to-purple-600'
     };
 
-    addOrUpdateExam(examFormCategory, examItem);
-    showToast(`${editingExamId ? 'Updated' : 'Added'} examination "${examName}" to ${examFormCategory.toUpperCase()} category!`, 'success');
+    await addOrUpdateExam(examFormCategory, examItem);
 
     // Reset form
     setEditingExamId(null);
@@ -990,14 +1041,14 @@ export const AdminPanelView: React.FC = () => {
             <div className="hidden sm:flex items-center -space-x-3 shrink-0 mt-1">
               <div className="w-12 h-12 rounded-xl overflow-hidden bg-white border border-amber-300 p-0.5 shadow-md z-10">
                 <img 
-                  src="https://cdn.jsdelivr.net/gh/luckymohittiwari52-oss/quiz-assets@main/images/bokbon.jpg" 
+                  src="/logo.jpg" 
                   alt="BooksBoon" 
                   className="w-full h-full object-contain rounded-lg"
                 />
               </div>
               <div className="w-12 h-12 rounded-xl overflow-hidden bg-white border border-indigo-300 p-0.5 shadow-md z-0">
                 <img 
-                  src="https://cdn.jsdelivr.net/gh/luckymohittiwari52-oss/quiz-assets@main/images/sjgj.jpg" 
+                  src="/sjgj.jpg" 
                   alt="Samwedna" 
                   className="w-full h-full object-contain rounded-lg"
                 />
@@ -1005,14 +1056,18 @@ export const AdminPanelView: React.FC = () => {
             </div>
 
             <div className="space-y-1">
-              <div className="flex items-center gap-2">
+              <div className="flex flex-wrap items-center gap-2">
                 <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-ping" />
                 <span className="text-[10px] font-bold text-cyan-300 tracking-wider uppercase">
                   ADMIN CONSOLE ACTIVE
                 </span>
                 <span className="text-slate-400 text-xs">•</span>
                 <span className="text-xs text-slate-300">
-                  Supabase: {isSupabaseConfigured() ? 'Connected' : 'Local Hybrid Store'}
+                  Firebase Cloud: {isFirebaseAdminReady ? 'Verified Live Broadcast' : 'Local Only (Auth Required)'}
+                </span>
+                <span className="text-slate-400 text-xs">•</span>
+                <span className="text-xs text-slate-300">
+                  Supabase: {isSupabaseConfigured() ? 'Connected' : 'Optional'}
                 </span>
               </div>
 
@@ -1083,6 +1138,59 @@ export const AdminPanelView: React.FC = () => {
           </div>
         </div>
       </div>
+
+      {/* Live Public Broadcast Status Banner */}
+      {!isFirebaseAdminReady ? (
+        <div className="bg-rose-50 border-2 border-rose-300 rounded-2xl p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-sm">
+          <div className="flex items-start gap-3">
+            <div className="p-2 rounded-xl bg-rose-100 text-rose-700 shrink-0">
+              <ShieldAlert className="w-5 h-5" />
+            </div>
+            <div className="space-y-1">
+              <h3 className="text-sm font-black text-rose-900">
+                Action Required: Uploads Are Saving Locally Only (Invisible to Other Users!)
+              </h3>
+              <p className="text-xs text-rose-800 leading-relaxed">
+                You are currently signed in via local email fallback without an active Google Firebase Admin token. Any Current Affairs, PDFs, or Books you upload right now will only show on this browser until you verify your authorized Admin Gmail session.
+              </p>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={handleVerifyGoogleAdmin}
+            disabled={isVerifyingGoogleAdmin}
+            className="px-4 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs shrink-0 flex items-center gap-2 cursor-pointer shadow-md disabled:opacity-60"
+          >
+            {isVerifyingGoogleAdmin ? <RefreshCw className="w-4 h-4 animate-spin" /> : <ShieldCheck className="w-4 h-4" />}
+            <span>{isVerifyingGoogleAdmin ? 'Verifying & Syncing...' : 'Verify Google Admin & Sync All Live'}</span>
+          </button>
+        </div>
+      ) : (
+        <div className="bg-emerald-50 border border-emerald-200 rounded-2xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-2xs">
+          <div className="flex items-center gap-3">
+            <div className="p-2 rounded-xl bg-emerald-100 text-emerald-700 shrink-0">
+              <CheckCircle2 className="w-5 h-5" />
+            </div>
+            <div>
+              <p className="text-xs font-bold text-emerald-900">
+                Global Cloud Broadcast Active ({firebaseAuthEmail})
+              </p>
+              <p className="text-[11px] text-emerald-700">
+                All Current Affairs, PDFs, Tests, Books &amp; Videos publish directly to Firestore{isSupabaseConfigured() ? ' & Supabase' : ''} so EVERY visitor (logged in with any ID or logged out) sees them immediately.
+              </p>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={handleSyncAllToFirestore}
+            disabled={isSyncingFirestore}
+            className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs shrink-0 flex items-center gap-1.5 cursor-pointer shadow-xs disabled:opacity-60"
+          >
+            <RefreshCw className={`w-3.5 h-3.5 ${isSyncingFirestore ? 'animate-spin' : ''}`} />
+            <span>{isSyncingFirestore ? 'Syncing...' : 'Push All Content to Cloud Now'}</span>
+          </button>
+        </div>
+      )}
 
       {/* Admin Tabs */}
       <div className="flex items-center gap-2 border-b border-slate-200 overflow-x-auto pb-1">

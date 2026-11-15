@@ -225,81 +225,281 @@ export const TestScoresService = {
   }
 };
 
+export interface SupabaseOpResult {
+  success: boolean;
+  message?: string;
+}
+
 // 3. CURRENT AFFAIRS REPOSITORY
 export const CurrentAffairsService = {
-  async upsert(article: CurrentAffairArticle): Promise<void> {
-    if (supabaseClient) {
-      try {
-        await upsertResilient(supabaseClient, 'current_affairs', [article], 'id');
-      } catch (e) {
-        console.warn('Supabase CA upsert fallback:', e);
-      }
+  async upsert(article: CurrentAffairArticle): Promise<SupabaseOpResult> {
+    const client = supabaseClient || initSupabaseClient();
+    if (!client) return { success: false, message: 'Supabase not configured' };
+    try {
+      const clean = {
+        id: article.id,
+        title: article.title,
+        hindiTitle: article.hindiTitle || null,
+        date: article.date,
+        category: article.category,
+        tags: article.tags || [],
+        readTime: article.readTime || '5 min',
+        summary: article.summary || '',
+        hindiSummary: article.hindiSummary || null,
+        keyPoints: article.keyPoints || [],
+        hindiKeyPoints: article.hindiKeyPoints || [],
+        fullContent: article.fullContent || '',
+        hindiFullContent: article.hindiFullContent || null,
+        isHtmlFormatted: Boolean(article.isHtmlFormatted),
+        imageUrl: article.imageUrl || null,
+        bannerImage: article.bannerImage || article.imageUrl || null,
+        pdfUrl: article.pdfUrl || null,
+        relatedMcq: article.relatedMcq || null
+      };
+      const res = await upsertResilient(client, 'current_affairs', [clean], 'id');
+      return { success: res.success, message: res.message };
+    } catch (e: any) {
+      return { success: false, message: e?.message || String(e) };
     }
   },
-  async delete(id: string): Promise<void> {
-    if (supabaseClient) {
-      try {
-        await supabaseClient.from('current_affairs').delete().or(`id.eq.${id},id.eq.${toDeterministicUuid(id)}`);
-      } catch (e) {
-        console.warn('Supabase CA delete fallback:', e);
+  async delete(id: string): Promise<SupabaseOpResult> {
+    const client = supabaseClient || initSupabaseClient();
+    if (!client) return { success: false, message: 'Supabase not configured' };
+    try {
+      const { error } = await client.from('current_affairs').delete().or(`id.eq.${id},id.eq.${toDeterministicUuid(id)}`);
+      if (error) return { success: false, message: error.message };
+      return { success: true };
+    } catch (e: any) {
+      return { success: false, message: e?.message || String(e) };
+    }
+  },
+  async fetchAll(): Promise<CurrentAffairArticle[]> {
+    const client = supabaseClient || initSupabaseClient();
+    if (!client) return [];
+    try {
+      const { data, error } = await client.from('current_affairs').select('*').order('createdAt', { ascending: false });
+      if (error) {
+        const fallback = await client.from('current_affairs').select('*');
+        if (fallback.error || !Array.isArray(fallback.data)) return [];
+        return fallback.data as CurrentAffairArticle[];
       }
+      return Array.isArray(data) ? (data as CurrentAffairArticle[]) : [];
+    } catch {
+      return [];
     }
   }
 };
 
 // 4. FREE PDFS REPOSITORY
 export const FreePdfsService = {
-  async upsert(pdf: FreePdfResource): Promise<void> {
-    if (supabaseClient) {
-      try {
-        await upsertResilient(supabaseClient, 'free_pdfs', [pdf], 'id');
-      } catch (e) {
-        console.warn('Supabase PDF upsert fallback:', e);
-      }
+  async upsert(pdf: FreePdfResource): Promise<SupabaseOpResult> {
+    const client = supabaseClient || initSupabaseClient();
+    if (!client) return { success: false, message: 'Supabase not configured' };
+    try {
+      const url = pdf.downloadUrl || '/samples/sample.pdf';
+      const clean = {
+        id: pdf.id,
+        title: pdf.title,
+        hindiTitle: pdf.hindiTitle || null,
+        category: pdf.category,
+        subject: pdf.subject || 'General Studies',
+        hindiSubject: pdf.hindiSubject || null,
+        fileSize: pdf.fileSize || '10 MB',
+        pages: Number(pdf.pages) || 50,
+        downloadUrl: url,
+        downloadurl: url,
+        description: pdf.description || '',
+        hindiDescription: pdf.hindiDescription || null,
+        language: pdf.language || 'Bilingual',
+        dateAdded: pdf.dateAdded || 'Recently Added',
+        downloadsCount: Number(pdf.downloadsCount) || 1,
+        isTrending: Boolean(pdf.isTrending)
+      };
+      const res = await upsertResilient(client, 'free_pdfs', [clean], 'id');
+      return { success: res.success, message: res.message };
+    } catch (e: any) {
+      return { success: false, message: e?.message || String(e) };
     }
   },
-  async delete(id: string): Promise<void> {
-    if (supabaseClient) {
-      try {
-        await supabaseClient.from('free_pdfs').delete().or(`id.eq.${id},id.eq.${toDeterministicUuid(id)}`);
-      } catch (e) {
-        console.warn('Supabase PDF delete fallback:', e);
-      }
+  async delete(id: string): Promise<SupabaseOpResult> {
+    const client = supabaseClient || initSupabaseClient();
+    if (!client) return { success: false, message: 'Supabase not configured' };
+    try {
+      const { error } = await client.from('free_pdfs').delete().or(`id.eq.${id},id.eq.${toDeterministicUuid(id)}`);
+      if (error) return { success: false, message: error.message };
+      return { success: true };
+    } catch (e: any) {
+      return { success: false, message: e?.message || String(e) };
+    }
+  },
+  async fetchAll(): Promise<FreePdfResource[]> {
+    const client = supabaseClient || initSupabaseClient();
+    if (!client) return [];
+    try {
+      const { data, error } = await client.from('free_pdfs').select('*');
+      if (error || !Array.isArray(data)) return [];
+      return data.map((row: any) => ({
+        ...row,
+        downloadUrl: row.downloadUrl || row.downloadurl || '/samples/sample.pdf'
+      })) as FreePdfResource[];
+    } catch {
+      return [];
     }
   }
 };
 
 // 5. BOOKS SERVICE
 export const BooksService = {
-  async upsert(book: Book): Promise<void> {
-    if (supabaseClient) {
-      try {
-        await supabaseClient.from('books').upsert([book], { onConflict: 'id' });
-      } catch (e) {
-        console.warn('Supabase book upsert fallback:', e);
-      }
+  async upsert(book: Book): Promise<SupabaseOpResult> {
+    const client = supabaseClient || initSupabaseClient();
+    if (!client) return { success: false, message: 'Supabase not configured' };
+    try {
+      const clean = {
+        id: book.id,
+        title: book.title,
+        hindiTitle: book.hindiTitle || null,
+        author: book.author || 'Samwedna Editorial Board',
+        hindiAuthor: book.hindiAuthor || null,
+        category: book.category,
+        subject: book.subject || 'Exam Special',
+        price: Number(book.paperbackPrice || 395),
+        paperbackPrice: Number(book.paperbackPrice || 395),
+        originalPrice: Number(book.originalPrice || 480),
+        ebookAvailable: Boolean(book.ebookAvailable),
+        rating: Number(book.rating) || 4.9,
+        reviewsCount: Number(book.reviewsCount) || 100,
+        pages: Number(book.pages) || 350,
+        language: book.language || 'Hindi',
+        badge: book.badge || null,
+        description: book.description || '',
+        hindiDescription: book.hindiDescription || null,
+        bannerImage: book.bannerImage || null,
+        inStock: book.inStock !== false,
+        stockCount: Number(book.stockCount) || 100
+      };
+      const res = await upsertResilient(client, 'books', [clean], 'id');
+      return { success: res.success, message: res.message };
+    } catch (e: any) {
+      return { success: false, message: e?.message || String(e) };
+    }
+  },
+  async fetchAll(): Promise<Book[]> {
+    const client = supabaseClient || initSupabaseClient();
+    if (!client) return [];
+    try {
+      const { data, error } = await client.from('books').select('*');
+      if (error || !Array.isArray(data)) return [];
+      return data as Book[];
+    } catch {
+      return [];
     }
   }
 };
 
 // 6. EXAMS & SYLLABUS REPOSITORY
 export const ExamsService = {
-  async upsert(exam: any): Promise<void> {
-    if (supabaseClient) {
-      try {
-        await supabaseClient.from('exams').upsert([exam], { onConflict: 'id' });
-      } catch (e) {
-        console.warn('Supabase exam upsert fallback:', e);
-      }
+  async upsert(exam: any): Promise<SupabaseOpResult> {
+    const client = supabaseClient || initSupabaseClient();
+    if (!client) return { success: false, message: 'Supabase not configured' };
+    try {
+      const res = await upsertResilient(client, 'exams', [exam], 'id');
+      return { success: res.success, message: res.message };
+    } catch (e: any) {
+      return { success: false, message: e?.message || String(e) };
     }
   },
-  async delete(id: string): Promise<void> {
-    if (supabaseClient) {
-      try {
-        await supabaseClient.from('exams').delete().eq('id', id);
-      } catch (e) {
-        console.warn('Supabase exam delete fallback:', e);
-      }
+  async delete(id: string): Promise<SupabaseOpResult> {
+    const client = supabaseClient || initSupabaseClient();
+    if (!client) return { success: false, message: 'Supabase not configured' };
+    try {
+      const { error } = await client.from('exams').delete().or(`id.eq.${id},id.eq.${toDeterministicUuid(id)}`);
+      if (error) return { success: false, message: error.message };
+      return { success: true };
+    } catch (e: any) {
+      return { success: false, message: e?.message || String(e) };
+    }
+  },
+  async fetchAll(): Promise<any[]> {
+    const client = supabaseClient || initSupabaseClient();
+    if (!client) return [];
+    try {
+      const { data, error } = await client.from('exams').select('*');
+      if (error || !Array.isArray(data)) return [];
+      return data;
+    } catch {
+      return [];
+    }
+  }
+};
+
+// 7. TEST SERIES REPOSITORY
+export const TestSeriesService = {
+  async upsert(test: TestSeriesExam): Promise<SupabaseOpResult> {
+    const client = supabaseClient || initSupabaseClient();
+    if (!client) return { success: false, message: 'Supabase not configured' };
+    try {
+      const clean = {
+        id: test.id,
+        title: test.title,
+        hindiTitle: test.hindiTitle || null,
+        category: test.category,
+        hindiCategory: test.hindiCategory || null,
+        duration: Number(test.durationMinutes || 60),
+        durationMinutes: Number(test.durationMinutes || 60),
+        totalQuestions: Number(test.totalQuestions || 100),
+        totalMarks: Number(test.totalMarks || 100),
+        questionsCount: Number(test.totalQuestions || 100),
+        negativeMarking: Number(test.negativeMarking || 0.25),
+        difficulty: test.difficulty || 'Moderate',
+        enrolledStudents: Number(test.enrolledStudents || 1000),
+        isFreeDemo: Boolean(test.isFreeDemo),
+        syllabusCovered: test.syllabusCovered || [],
+        hindiSyllabusCovered: test.hindiSyllabusCovered || [],
+        language: test.language || 'Bilingual',
+        lastUpdated: test.lastUpdated || '2026',
+        associatedBookId: test.associatedBookId || null,
+        questions: test.questions || []
+      };
+      const res = await upsertResilient(client, 'test_series', [clean], 'id');
+      return { success: res.success, message: res.message };
+    } catch (e: any) {
+      return { success: false, message: e?.message || String(e) };
+    }
+  },
+  async fetchAll(): Promise<TestSeriesExam[]> {
+    const client = supabaseClient || initSupabaseClient();
+    if (!client) return [];
+    try {
+      const { data, error } = await client.from('test_series').select('*');
+      if (error || !Array.isArray(data)) return [];
+      return data as TestSeriesExam[];
+    } catch {
+      return [];
+    }
+  }
+};
+
+// 8. VIDEO LECTURES REPOSITORY
+export const VideoLecturesService = {
+  async upsert(video: VideoLecture): Promise<SupabaseOpResult> {
+    const client = supabaseClient || initSupabaseClient();
+    if (!client) return { success: false, message: 'Supabase not configured' };
+    try {
+      const res = await upsertResilient(client, 'video_lectures', [video], 'id');
+      return { success: res.success, message: res.message };
+    } catch (e: any) {
+      return { success: false, message: e?.message || String(e) };
+    }
+  },
+  async fetchAll(): Promise<VideoLecture[]> {
+    const client = supabaseClient || initSupabaseClient();
+    if (!client) return [];
+    try {
+      const { data, error } = await client.from('video_lectures').select('*');
+      if (error || !Array.isArray(data)) return [];
+      return data as VideoLecture[];
+    } catch {
+      return [];
     }
   }
 };

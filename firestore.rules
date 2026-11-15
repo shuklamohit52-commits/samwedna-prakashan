@@ -24,12 +24,14 @@ service cloud.firestore {
     }
 
     function isAuthorizedAdminEmail() {
-      return isSignedIn() && (
-        request.auth.token.email == 'shukla.mohit52@gmail.com' ||
-        request.auth.token.email == 'booksboon17@gmail.com' ||
-        request.auth.token.email == 'sgi181069@gmail.com' ||
-        request.auth.token.email == 'spiindia181069@gmail.com' ||
-        request.auth.token.email == 'archanashuklashukla58@gmail.com'
+      return isSignedIn() && request.auth.token.email != null && (
+        request.auth.token.email.lower() in [
+          'shukla.mohit52@gmail.com',
+          'booksboon17@gmail.com',
+          'sgi181069@gmail.com',
+          'spiindia181069@gmail.com',
+          'archanashuklashukla58@gmail.com'
+        ]
       );
     }
 
@@ -66,7 +68,7 @@ service cloud.firestore {
       allow update, delete: if isAuthorizedAdminEmail();
     }
 
-    // Public educational resources: readable by everyone, manageable by authorized administrators
+    // Public educational resources: readable by everyone (logged in or logged out), manageable by authorized administrators
     match /current_affairs/{articleId} {
       allow read: if true;
       allow create, update, delete: if isAuthorizedAdminEmail();
@@ -88,6 +90,16 @@ service cloud.firestore {
     }
 
     match /books/{bookId} {
+      allow read: if true;
+      allow create, update, delete: if isAuthorizedAdminEmail();
+    }
+
+    match /exams/{examId} {
+      allow read: if true;
+      allow create, update, delete: if isAuthorizedAdminEmail();
+    }
+
+    match /public_settings/{settingId} {
       allow read: if true;
       allow create, update, delete: if isAuthorizedAdminEmail();
     }

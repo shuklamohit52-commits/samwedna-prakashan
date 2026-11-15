@@ -70,6 +70,7 @@ export interface TestSeriesExam {
   lastUpdated: string;
   associatedBookId?: string;
   questions?: CBTQuestion[];
+  createdAt?: number | string;
 }
 
 export interface UserTestScore {
@@ -124,6 +125,7 @@ export interface Book {
   isbn?: string;
   isHardCopyOnly?: boolean;
   isMagazine?: boolean;
+  createdAt?: number | string;
 }
 
 export interface CartItem {
@@ -208,6 +210,7 @@ export interface CurrentAffairArticle {
     hindiExplanation?: string;
   };
   pdfUrl?: string;
+  createdAt?: number | string;
 }
 
 export interface FreePdfResource {
@@ -228,6 +231,7 @@ export interface FreePdfResource {
   previewExcerpt?: string;
   language?: 'Hindi' | 'English' | 'Bilingual';
   tags?: string[];
+  createdAt?: number | string;
 }
 
 export interface StudyMaterialItem {
@@ -263,6 +267,7 @@ export interface VideoLecture {
   youtubeId?: string;
   videoUrl?: string;
   pdfNotesUrl?: string;
+  createdAt?: number | string;
 }
 
 export interface HardCopyOrder {

@@ -21,6 +21,7 @@ import { Flame } from 'lucide-react';
 
 export const ProductView: React.FC = () => {
   const { 
+    booksCatalog,
     setSelectedBook, 
     addToCart, 
     setCurrentView, 
@@ -54,7 +55,8 @@ export const ProductView: React.FC = () => {
   const languages = ['All', 'Hindi', 'English', 'Bilingual'];
 
   const filteredBooks = useMemo(() => {
-    return BOOKS_DATA.filter((book) => {
+    const sourceBooks = booksCatalog && booksCatalog.length > 0 ? booksCatalog : BOOKS_DATA;
+    return sourceBooks.filter((book) => {
       // Category filter
       if (filterCategory !== 'All' && book.category !== filterCategory) {
         return false;

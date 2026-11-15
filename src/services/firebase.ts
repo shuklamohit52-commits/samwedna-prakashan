@@ -368,35 +368,130 @@ export const persistTestScoreToFirestore = async (score: UserTestScore) => {
 };
 
 /**
+ * Strip undefined recursively so Firestore setDoc never throws invalid field errors
+ */
+const sanitizeForFirestore = <T>(obj: T): T => {
+  if (Array.isArray(obj)) {
+    return obj.map(item => sanitizeForFirestore(item)) as unknown as T;
+  }
+  if (obj && typeof obj === 'object') {
+    const clean: Record<string, any> = {};
+    for (const [key, val] of Object.entries(obj)) {
+      if (val !== undefined) {
+        clean[key] = sanitizeForFirestore(val);
+      }
+    }
+    return clean as T;
+  }
+  return obj;
+};
+
+/**
+ * Helper to sort items newest-first using createdAt, timestamp suffix in id, or date
+ */
+export const extractTimestampMs = (item: { id?: string; createdAt?: number | string; date?: string }): number => {
+  if (typeof item.createdAt === 'number' && !Number.isNaN(item.createdAt)) {
+    return item.createdAt;
+  }
+  if (typeof item.createdAt === 'string') {
+    const parsed = Date.parse(item.createdAt);
+    if (!Number.isNaN(parsed)) return parsed;
+  }
+  if (item.id) {
+    const numMatch = item.id.match(/(\d{10,13})$/);
+    if (numMatch) {
+      const n = Number(numMatch[1]);
+      if (!Number.isNaN(n)) return numMatch[1].length === 10 ? n * 1000 : n;
+    }
+  }
+  if (item.date) {
+    const parsedDate = Date.parse(item.date);
+    if (!Number.isNaN(parsedDate)) return parsedDate;
+  }
+  return 0;
+};
+
+export interface FirestoreWriteResult {
+  ok: boolean;
+  error?: string;
+  code?: string;
+}
+
+const formatFirestoreWriteError = (error: any): FirestoreWriteResult => {
+  const code = error?.code || 'unknown';
+  const rawMessage = error?.message || String(error);
+
+  if (!auth.currentUser) {
+    return {
+      ok: false,
+      code: 'unauthenticated',
+      error: 'Firebase session is not authenticated. Click "Verify Google Admin Account" in Admin Console so uploads sync to all visitors.'
+    };
+  }
+  if (code === 'permission-denied' || rawMessage.toLowerCase().includes('permission')) {
+    return {
+      ok: false,
+      code: 'permission-denied',
+      error: `Firestore permission denied for "${auth.currentUser.email || 'current user'}". Sign in with an authorized Admin Gmail account.`
+    };
+  }
+  if (rawMessage.toLowerCase().includes('exceeds the maximum allowed size') || code === 'invalid-argument') {
+    return {
+      ok: false,
+      code: 'document-too-large',
+      error: 'Item size exceeds Firestore 1 MB limit (likely a large embedded image or PDF). Use an image under 800KB or a hosted PDF/Image URL.'
+    };
+  }
+  return { ok: false, code, error: rawMessage };
+};
+
+/**
  * 1. Current Affairs Firestore Synchronization
  */
-export const saveCurrentAffairToFirestore = async (article: CurrentAffairArticle) => {
-  const path = `current_affairs/${article.id}`;
+export const saveCurrentAffairToFirestore = async (article: CurrentAffairArticle): Promise<FirestoreWriteResult> => {
   try {
     const ref = doc(db, 'current_affairs', article.id);
-    await setDoc(ref, article, { merge: true });
+    const payload = sanitizeForFirestore({
+      ...article,
+      createdAt: article.createdAt ?? (extractTimestampMs(article) || Date.now()),
+      updatedAt: Date.now()
+    });
+    await setDoc(ref, payload, { merge: true });
+    return { ok: true };
   } catch (error) {
-    console.warn('Firestore write notice (falling back locally):', error);
+    const formatted = formatFirestoreWriteError(error);
+    console.warn('Firestore current_affairs write error:', formatted);
+    return formatted;
   }
 };
 
-export const deleteCurrentAffairFromFirestore = async (articleId: string) => {
-  const path = `current_affairs/${articleId}`;
+export const deleteCurrentAffairFromFirestore = async (articleId: string): Promise<FirestoreWriteResult> => {
   try {
     const ref = doc(db, 'current_affairs', articleId);
     await deleteDoc(ref);
+    return { ok: true };
   } catch (error) {
-    console.warn('Firestore delete notice (falling back locally):', error);
+    const formatted = formatFirestoreWriteError(error);
+    console.warn('Firestore current_affairs delete error:', formatted);
+    return formatted;
+  }
+};
+
+export const fetchCurrentAffairsFromFirestore = async (): Promise<CurrentAffairArticle[] | null> => {
+  try {
+    const snap = await getDocs(collection(db, 'current_affairs'));
+    return snap.docs.map(d => d.data() as CurrentAffairArticle);
+  } catch (err) {
+    console.warn('Firestore fetch current_affairs notice:', err);
+    return null;
   }
 };
 
 export const subscribeToCurrentAffairs = (callback: (articles: CurrentAffairArticle[]) => void) => {
   try {
     return onSnapshot(collection(db, 'current_affairs'), (snapshot) => {
-      if (!snapshot.empty) {
-        const items = snapshot.docs.map(doc => doc.data() as CurrentAffairArticle);
-        callback(items);
-      }
+      const items = snapshot.docs.map(d => d.data() as CurrentAffairArticle);
+      callback(items);
     }, (err) => {
       console.warn('Firestore current_affairs subscription notice:', err.message);
     });
@@ -409,31 +504,50 @@ export const subscribeToCurrentAffairs = (callback: (articles: CurrentAffairArti
 /**
  * 2. Free PDFs Firestore Synchronization
  */
-export const saveFreePdfToFirestore = async (pdf: FreePdfResource) => {
+export const saveFreePdfToFirestore = async (pdf: FreePdfResource): Promise<FirestoreWriteResult> => {
   try {
     const ref = doc(db, 'free_pdfs', pdf.id);
-    await setDoc(ref, pdf, { merge: true });
+    const payload = sanitizeForFirestore({
+      ...pdf,
+      createdAt: pdf.createdAt ?? (extractTimestampMs(pdf) || Date.now()),
+      updatedAt: Date.now()
+    });
+    await setDoc(ref, payload, { merge: true });
+    return { ok: true };
   } catch (error) {
-    console.warn('Firestore free_pdfs write notice:', error);
+    const formatted = formatFirestoreWriteError(error);
+    console.warn('Firestore free_pdfs write error:', formatted);
+    return formatted;
   }
 };
 
-export const deleteFreePdfFromFirestore = async (pdfId: string) => {
+export const deleteFreePdfFromFirestore = async (pdfId: string): Promise<FirestoreWriteResult> => {
   try {
     const ref = doc(db, 'free_pdfs', pdfId);
     await deleteDoc(ref);
+    return { ok: true };
   } catch (error) {
-    console.warn('Firestore free_pdfs delete notice:', error);
+    const formatted = formatFirestoreWriteError(error);
+    console.warn('Firestore free_pdfs delete error:', formatted);
+    return formatted;
+  }
+};
+
+export const fetchFreePdfsFromFirestore = async (): Promise<FreePdfResource[] | null> => {
+  try {
+    const snap = await getDocs(collection(db, 'free_pdfs'));
+    return snap.docs.map(d => d.data() as FreePdfResource);
+  } catch (err) {
+    console.warn('Firestore fetch free_pdfs notice:', err);
+    return null;
   }
 };
 
 export const subscribeToFreePdfs = (callback: (pdfs: FreePdfResource[]) => void) => {
   try {
     return onSnapshot(collection(db, 'free_pdfs'), (snapshot) => {
-      if (!snapshot.empty) {
-        const items = snapshot.docs.map(doc => doc.data() as FreePdfResource);
-        callback(items);
-      }
+      const items = snapshot.docs.map(d => d.data() as FreePdfResource);
+      callback(items);
     }, (err) => {
       console.warn('Firestore free_pdfs subscription notice:', err.message);
     });
@@ -446,22 +560,38 @@ export const subscribeToFreePdfs = (callback: (pdfs: FreePdfResource[]) => void)
 /**
  * 3. CBT Mock Tests Firestore Synchronization
  */
-export const saveTestSeriesToFirestore = async (test: TestSeriesExam) => {
+export const saveTestSeriesToFirestore = async (test: TestSeriesExam): Promise<FirestoreWriteResult> => {
   try {
     const ref = doc(db, 'test_series', test.id);
-    await setDoc(ref, test, { merge: true });
+    const payload = sanitizeForFirestore({
+      ...test,
+      createdAt: test.createdAt ?? (extractTimestampMs(test) || Date.now()),
+      updatedAt: Date.now()
+    });
+    await setDoc(ref, payload, { merge: true });
+    return { ok: true };
   } catch (error) {
-    console.warn('Firestore test_series write notice:', error);
+    const formatted = formatFirestoreWriteError(error);
+    console.warn('Firestore test_series write error:', formatted);
+    return formatted;
+  }
+};
+
+export const fetchTestSeriesFromFirestore = async (): Promise<TestSeriesExam[] | null> => {
+  try {
+    const snap = await getDocs(collection(db, 'test_series'));
+    return snap.docs.map(d => d.data() as TestSeriesExam);
+  } catch (err) {
+    console.warn('Firestore fetch test_series notice:', err);
+    return null;
   }
 };
 
 export const subscribeToTestSeries = (callback: (tests: TestSeriesExam[]) => void) => {
   try {
     return onSnapshot(collection(db, 'test_series'), (snapshot) => {
-      if (!snapshot.empty) {
-        const items = snapshot.docs.map(doc => doc.data() as TestSeriesExam);
-        callback(items);
-      }
+      const items = snapshot.docs.map(d => d.data() as TestSeriesExam);
+      callback(items);
     }, (err) => {
       console.warn('Firestore test_series subscription notice:', err.message);
     });
@@ -474,22 +604,38 @@ export const subscribeToTestSeries = (callback: (tests: TestSeriesExam[]) => voi
 /**
  * 4. Video Lectures Firestore Synchronization
  */
-export const saveVideoLectureToFirestore = async (video: VideoLecture) => {
+export const saveVideoLectureToFirestore = async (video: VideoLecture): Promise<FirestoreWriteResult> => {
   try {
     const ref = doc(db, 'video_lectures', video.id);
-    await setDoc(ref, video, { merge: true });
+    const payload = sanitizeForFirestore({
+      ...video,
+      createdAt: video.createdAt ?? (extractTimestampMs(video) || Date.now()),
+      updatedAt: Date.now()
+    });
+    await setDoc(ref, payload, { merge: true });
+    return { ok: true };
   } catch (error) {
-    console.warn('Firestore video_lectures write notice:', error);
+    const formatted = formatFirestoreWriteError(error);
+    console.warn('Firestore video_lectures write error:', formatted);
+    return formatted;
+  }
+};
+
+export const fetchVideoLecturesFromFirestore = async (): Promise<VideoLecture[] | null> => {
+  try {
+    const snap = await getDocs(collection(db, 'video_lectures'));
+    return snap.docs.map(d => d.data() as VideoLecture);
+  } catch (err) {
+    console.warn('Firestore fetch video_lectures notice:', err);
+    return null;
   }
 };
 
 export const subscribeToVideoLectures = (callback: (videos: VideoLecture[]) => void) => {
   try {
     return onSnapshot(collection(db, 'video_lectures'), (snapshot) => {
-      if (!snapshot.empty) {
-        const items = snapshot.docs.map(doc => doc.data() as VideoLecture);
-        callback(items);
-      }
+      const items = snapshot.docs.map(d => d.data() as VideoLecture);
+      callback(items);
     }, (err) => {
       console.warn('Firestore video_lectures subscription notice:', err.message);
     });
@@ -502,22 +648,38 @@ export const subscribeToVideoLectures = (callback: (videos: VideoLecture[]) => v
 /**
  * 5. BooksBoon Catalog Firestore Synchronization
  */
-export const saveBookToFirestore = async (book: Book) => {
+export const saveBookToFirestore = async (book: Book): Promise<FirestoreWriteResult> => {
   try {
     const ref = doc(db, 'books', book.id);
-    await setDoc(ref, book, { merge: true });
+    const payload = sanitizeForFirestore({
+      ...book,
+      createdAt: book.createdAt ?? (extractTimestampMs(book) || Date.now()),
+      updatedAt: Date.now()
+    });
+    await setDoc(ref, payload, { merge: true });
+    return { ok: true };
   } catch (error) {
-    console.warn('Firestore books write notice:', error);
+    const formatted = formatFirestoreWriteError(error);
+    console.warn('Firestore books write error:', formatted);
+    return formatted;
+  }
+};
+
+export const fetchBooksFromFirestore = async (): Promise<Book[] | null> => {
+  try {
+    const snap = await getDocs(collection(db, 'books'));
+    return snap.docs.map(d => d.data() as Book);
+  } catch (err) {
+    console.warn('Firestore fetch books notice:', err);
+    return null;
   }
 };
 
 export const subscribeToBooks = (callback: (books: Book[]) => void) => {
   try {
     return onSnapshot(collection(db, 'books'), (snapshot) => {
-      if (!snapshot.empty) {
-        const items = snapshot.docs.map(doc => doc.data() as Book);
-        callback(items);
-      }
+      const items = snapshot.docs.map(d => d.data() as Book);
+      callback(items);
     }, (err) => {
       console.warn('Firestore books subscription notice:', err.message);
     });
@@ -528,7 +690,76 @@ export const subscribeToBooks = (callback: (books: Book[]) => void) => {
 };
 
 /**
- * 6. Real Registered Users Directory Synchronization for Admin
+ * 6. Exams Registry & Public Settings Firestore Synchronization
+ */
+export const saveExamToFirestore = async (categoryId: string, exam: any): Promise<FirestoreWriteResult> => {
+  try {
+    const ref = doc(db, 'exams', exam.id);
+    const payload = sanitizeForFirestore({
+      ...exam,
+      categoryId,
+      updatedAt: Date.now()
+    });
+    await setDoc(ref, payload, { merge: true });
+    return { ok: true };
+  } catch (error) {
+    const formatted = formatFirestoreWriteError(error);
+    console.warn('Firestore exams write notice:', formatted);
+    return formatted;
+  }
+};
+
+export const deleteExamFromFirestore = async (examId: string): Promise<FirestoreWriteResult> => {
+  try {
+    const ref = doc(db, 'exams', examId);
+    await deleteDoc(ref);
+    return { ok: true };
+  } catch (error) {
+    const formatted = formatFirestoreWriteError(error);
+    console.warn('Firestore exams delete notice:', formatted);
+    return formatted;
+  }
+};
+
+export const subscribeToExams = (callback: (exams: any[]) => void) => {
+  try {
+    return onSnapshot(collection(db, 'exams'), (snapshot) => {
+      const items = snapshot.docs.map(d => d.data());
+      callback(items);
+    }, (err) => {
+      console.warn('Firestore exams subscription notice:', err.message);
+    });
+  } catch (err) {
+    console.warn('Firestore exams listener unavailable:', err);
+    return () => {};
+  }
+};
+
+export const savePublicSettingToFirestore = async (settingId: string, data: Record<string, any>): Promise<FirestoreWriteResult> => {
+  try {
+    const ref = doc(db, 'public_settings', settingId);
+    await setDoc(ref, sanitizeForFirestore({ id: settingId, ...data, updatedAt: Date.now() }), { merge: true });
+    return { ok: true };
+  } catch (error) {
+    return formatFirestoreWriteError(error);
+  }
+};
+
+export const subscribeToPublicSetting = (settingId: string, callback: (data: Record<string, any> | null) => void) => {
+  try {
+    return onSnapshot(doc(db, 'public_settings', settingId), (snap) => {
+      callback(snap.exists() ? snap.data() : null);
+    }, (err) => {
+      console.warn(`Firestore public_settings/${settingId} notice:`, err.message);
+    });
+  } catch (err) {
+    console.warn('Firestore public_settings listener unavailable:', err);
+    return () => {};
+  }
+};
+
+/**
+ * 7. Real Registered Users Directory Synchronization for Admin
  */
 export const getAllUsersFromFirestore = async (): Promise<UserProfile[]> => {
   try {
