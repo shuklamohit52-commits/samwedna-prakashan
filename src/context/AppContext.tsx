@@ -41,6 +41,9 @@ import {
   AppSettingsService,
   syncAllDataToSupabase,
   isSupabaseConfigured,
+  getSupabaseShareMode,
+  setSupabasePublicSharedFlag,
+  subscribeToSupabaseChanges,
   saveSupabaseConfig,
   initSupabaseClient
 } from '../services/supabase';
@@ -164,6 +167,7 @@ interface AppContextType {
   firebaseAuthEmail: string | null;
   isFirebaseAdminReady: boolean;
   isSupabaseReady: boolean;
+  supabaseShareMode: 'env' | 'firestore' | 'local-only' | 'none';
   refreshSupabaseState: () => void;
   syncAllLocalContentToCloud: () => Promise<{ ok: boolean; summary: string }>;
   refreshPublicCloudData: () => Promise<void>;
@@ -281,8 +285,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const firebaseAuthEmail = firebaseAuthUser?.email || null;
   const isFirebaseAdminReady = Boolean(firebaseAuthEmail && isAuthorizedAdmin(firebaseAuthEmail));
   const [isSupabaseReady, setIsSupabaseReady] = useState<boolean>(() => isSupabaseConfigured());
+  const [supabaseShareMode, setSupabaseShareMode] = useState<'env' | 'firestore' | 'local-only' | 'none'>(() => getSupabaseShareMode());
   const refreshSupabaseState = () => {
     setIsSupabaseReady(isSupabaseConfigured());
+    setSupabaseShareMode(getSupabaseShareMode());
   };
 
   // Remote cloud buffers so Firestore + Supabase + defaults merge cleanly without wiping each other
@@ -371,10 +377,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       }
     });
 
-    // Remote Firestore overrides Supabase/local/defaults
+    // Remote Firestore adds items not in Supabase or newer than Supabase
     firestoreItems.forEach(item => {
       if (item && item.id && !deletedSet.has(item.id)) {
-        map.set(item.id, item);
+        const existing = map.get(item.id);
+        const existingIsFromSupabase = supabaseItems.some(s => s.id === item.id);
+        if (!existing || !existingIsFromSupabase || getCreationRank(item) > getCreationRank(existing)) {
+          map.set(item.id, item);
+        }
       }
     });
 
@@ -635,14 +645,33 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     const unsubSupabasePublic = subscribeToPublicSetting('supabase', (data) => {
       if (data && typeof data.url === 'string' && typeof data.anonKey === 'string' && data.url.startsWith('https://')) {
+        setSupabasePublicSharedFlag(true);
         if (!isSupabaseConfigured()) {
           saveSupabaseConfig(data.url, data.anonKey);
           initSupabaseClient(data.url, data.anonKey);
-          setIsSupabaseReady(true);
-          fetchAllFromSupabase();
         }
+        setIsSupabaseReady(true);
+        setSupabaseShareMode(getSupabaseShareMode());
+        fetchAllFromSupabase();
       }
     });
+
+    const unsubSupabaseRealtime = subscribeToSupabaseChanges(() => {
+      fetchAllFromSupabase();
+    });
+
+    const handleVisibilityOrFocus = () => {
+      if (document.visibilityState === 'visible' && isSupabaseConfigured()) {
+        fetchAllFromSupabase();
+      }
+    };
+    window.addEventListener('focus', handleVisibilityOrFocus);
+    document.addEventListener('visibilitychange', handleVisibilityOrFocus);
+    const pollInterval = window.setInterval(() => {
+      if (document.visibilityState === 'visible' && isSupabaseConfigured()) {
+        fetchAllFromSupabase();
+      }
+    }, 25000);
 
     // Real Registered Users from Firestore
     getAllUsersFromFirestore().then((remoteUsers) => {
@@ -669,6 +698,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       unsubExams && unsubExams();
       unsubDeleted && unsubDeleted();
       unsubSupabasePublic && unsubSupabasePublic();
+      unsubSupabaseRealtime && unsubSupabaseRealtime();
+      window.removeEventListener('focus', handleVisibilityOrFocus);
+      document.removeEventListener('visibilitychange', handleVisibilityOrFocus);
+      window.clearInterval(pollInterval);
     };
   }, []);
 
@@ -1712,6 +1745,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         firebaseAuthEmail,
         isFirebaseAdminReady,
         isSupabaseReady,
+        supabaseShareMode,
         refreshSupabaseState,
         syncAllLocalContentToCloud,
         refreshPublicCloudData,

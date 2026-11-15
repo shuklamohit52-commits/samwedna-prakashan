@@ -18,30 +18,68 @@ interface StoredSupabaseConfig {
   anonKey: string;
 }
 
+const SUPABASE_SHARED_FLAG_KEY = 'samwedna_supabase_shared_firestore';
+
+export const hasEnvSupabaseConfig = (): boolean => {
+  const url = (import.meta.env.VITE_SUPABASE_URL || '').trim();
+  const key = (import.meta.env.VITE_SUPABASE_ANON_KEY || '').trim();
+  return Boolean(url && key && url.startsWith('https://'));
+};
+
+export const setSupabasePublicSharedFlag = (shared: boolean): void => {
+  try {
+    if (shared) {
+      localStorage.setItem(SUPABASE_SHARED_FLAG_KEY, 'true');
+    } else {
+      localStorage.removeItem(SUPABASE_SHARED_FLAG_KEY);
+    }
+  } catch { /* ignore */ }
+};
+
+export const getSupabaseShareMode = (): 'env' | 'firestore' | 'local-only' | 'none' => {
+  if (hasEnvSupabaseConfig()) return 'env';
+  if (!isSupabaseConfigured()) return 'none';
+  try {
+    if (localStorage.getItem(SUPABASE_SHARED_FLAG_KEY) === 'true') return 'firestore';
+  } catch { /* ignore */ }
+  return 'local-only';
+};
+
 export const getStoredSupabaseConfig = (): StoredSupabaseConfig => {
+  const envUrl = (import.meta.env.VITE_SUPABASE_URL || '').trim();
+  const envKey = (import.meta.env.VITE_SUPABASE_ANON_KEY || '').trim();
+
   try {
     const raw = localStorage.getItem(SUPABASE_CONFIG_STORAGE_KEY);
-    if (raw) return JSON.parse(raw);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (parsed && typeof parsed.url === 'string' && parsed.url.trim() && typeof parsed.anonKey === 'string' && parsed.anonKey.trim()) {
+        return { url: parsed.url.trim(), anonKey: parsed.anonKey.trim() };
+      }
+    }
   } catch (e) {
     console.warn('Error reading stored Supabase config:', e);
   }
   return {
-    url: import.meta.env.VITE_SUPABASE_URL || '',
-    anonKey: import.meta.env.VITE_SUPABASE_ANON_KEY || ''
+    url: envUrl,
+    anonKey: envKey
   };
 };
 
 export const saveSupabaseConfig = (url: string, anonKey: string): void => {
-  localStorage.setItem(SUPABASE_CONFIG_STORAGE_KEY, JSON.stringify({ url, anonKey }));
+  const cleanUrl = url.trim();
+  const cleanKey = anonKey.trim();
+  localStorage.setItem(SUPABASE_CONFIG_STORAGE_KEY, JSON.stringify({ url: cleanUrl, anonKey: cleanKey }));
   // Re-initialize client
-  initSupabaseClient(url, anonKey);
+  initSupabaseClient(cleanUrl, cleanKey);
 };
 
 let supabaseClient: SupabaseClient | null = null;
 
 export const initSupabaseClient = (url?: string, anonKey?: string): SupabaseClient | null => {
-  const finalUrl = url || getStoredSupabaseConfig().url;
-  const finalKey = anonKey || getStoredSupabaseConfig().anonKey;
+  const stored = getStoredSupabaseConfig();
+  const finalUrl = (url || stored.url || '').trim();
+  const finalKey = (anonKey || stored.anonKey || '').trim();
 
   if (finalUrl && finalKey && finalUrl.startsWith('https://')) {
     try {
@@ -65,7 +103,32 @@ initSupabaseClient();
 
 export const isSupabaseConfigured = (): boolean => {
   const config = getStoredSupabaseConfig();
-  return Boolean(config.url && config.anonKey);
+  return Boolean(config.url && config.anonKey && config.url.startsWith('https://'));
+};
+
+export const subscribeToSupabaseChanges = (onChange: () => void): (() => void) => {
+  const client = supabaseClient || initSupabaseClient();
+  if (!client) return () => {};
+  try {
+    const channel = client
+      .channel('booksboon-public-sync')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'current_affairs' }, () => onChange())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'free_pdfs' }, () => onChange())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'books' }, () => onChange())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'test_series' }, () => onChange())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'video_lectures' }, () => onChange())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'exams' }, () => onChange())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'app_settings' }, () => onChange())
+      .subscribe();
+
+    return () => {
+      try {
+        client.removeChannel(channel);
+      } catch { /* ignore */ }
+    };
+  } catch {
+    return () => {};
+  }
 };
 
 export const testSupabaseConnection = async (url: string, anonKey: string): Promise<{ success: boolean; message: string }> => {
@@ -311,13 +374,40 @@ export const CurrentAffairsService = {
     const client = supabaseClient || initSupabaseClient();
     if (!client) return [];
     try {
+      let rows: any[] = [];
       const { data, error } = await client.from('current_affairs').select('*').order('createdAt', { ascending: false });
       if (error) {
         const fallback = await client.from('current_affairs').select('*');
         if (fallback.error || !Array.isArray(fallback.data)) return [];
-        return fallback.data as CurrentAffairArticle[];
+        rows = fallback.data;
+      } else if (Array.isArray(data)) {
+        rows = data;
       }
-      return Array.isArray(data) ? (data as CurrentAffairArticle[]) : [];
+
+      return rows
+        .filter(r => r && r.id)
+        .map((r: any) => ({
+          ...r,
+          id: String(r.id),
+          title: r.title || '',
+          hindiTitle: r.hindiTitle ?? r.hindititle ?? undefined,
+          date: r.date || 'Today',
+          category: r.category || 'National',
+          tags: Array.isArray(r.tags) ? r.tags : [],
+          readTime: r.readTime ?? r.readtime ?? '5 min read',
+          summary: r.summary || '',
+          hindiSummary: r.hindiSummary ?? r.hindisummary ?? undefined,
+          keyPoints: Array.isArray(r.keyPoints) ? r.keyPoints : (Array.isArray(r.keypoints) ? r.keypoints : []),
+          hindiKeyPoints: Array.isArray(r.hindiKeyPoints) ? r.hindiKeyPoints : (Array.isArray(r.hindikeypoints) ? r.hindikeypoints : undefined),
+          fullContent: r.fullContent ?? r.fullcontent ?? r.summary ?? '',
+          hindiFullContent: r.hindiFullContent ?? r.hindifullcontent ?? r.hindiSummary ?? r.hindisummary ?? undefined,
+          isHtmlFormatted: Boolean(r.isHtmlFormatted ?? r.ishtmlformatted ?? true),
+          imageUrl: r.imageUrl ?? r.imageurl ?? r.bannerImage ?? r.bannerimage ?? undefined,
+          bannerImage: r.bannerImage ?? r.bannerimage ?? r.imageUrl ?? r.imageurl ?? undefined,
+          pdfUrl: r.pdfUrl ?? r.pdfurl ?? undefined,
+          relatedMcq: r.relatedMcq ?? r.relatedmcq ?? undefined,
+          createdAt: r.createdAt ?? r.createdat ?? r.created_at ?? undefined
+        })) as CurrentAffairArticle[];
     } catch {
       return [];
     }

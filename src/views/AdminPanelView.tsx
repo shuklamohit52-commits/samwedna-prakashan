@@ -47,6 +47,8 @@ import {
   saveSupabaseConfig, 
   getStoredSupabaseConfig, 
   isSupabaseConfigured,
+  hasEnvSupabaseConfig,
+  setSupabasePublicSharedFlag,
   getSupabaseSchemaSql,
   syncAllDataToSupabase
 } from '../services/supabase';
@@ -72,6 +74,7 @@ export const AdminPanelView: React.FC = () => {
     firebaseAuthEmail,
     isFirebaseAdminReady,
     isSupabaseReady,
+    supabaseShareMode,
     refreshSupabaseState,
     syncAllLocalContentToCloud,
     refreshPublicCloudData,
@@ -301,17 +304,28 @@ export const AdminPanelView: React.FC = () => {
     setIsTestingSupabase(true);
     setSupabaseStatusMsg(null);
     const result = await testSupabaseConnection(supabaseUrl, supabaseKey);
-    setIsTestingSupabase(false);
-    setSupabaseStatusMsg(result);
     if (result.success) {
-      saveSupabaseConfig(supabaseUrl.trim(), supabaseKey.trim());
+      const cleanUrl = supabaseUrl.trim();
+      const cleanKey = supabaseKey.trim();
+      saveSupabaseConfig(cleanUrl, cleanKey);
+      const publicRes = await savePublicSettingToFirestore('supabase', { url: cleanUrl, anonKey: cleanKey });
+      setSupabasePublicSharedFlag(publicRes.ok);
       refreshSupabaseState();
-      savePublicSettingToFirestore('supabase', { url: supabaseUrl.trim(), anonKey: supabaseKey.trim() }).catch(() => {});
       refreshPublicCloudData().catch(() => {});
+
+      const finalMsg = hasEnvSupabaseConfig()
+        ? `${result.message} Global build variables (VITE_SUPABASE_*) are active — every visitor on all devices sees Supabase data automatically.`
+        : publicRes.ok
+        ? `${result.message} Shared globally via Firebase public_settings so all visitors can connect.`
+        : `${result.message} Note: Saved in THIS browser only — add VITE_SUPABASE_URL & VITE_SUPABASE_ANON_KEY to Cloudflare Build Variables and redeploy so other visitors (on other phones) also see your Supabase articles.`;
+
+      setSupabaseStatusMsg({ success: true, message: finalMsg });
       showToast(result.message, 'success');
     } else {
+      setSupabaseStatusMsg(result);
       showToast(result.message, 'error');
     }
+    setIsTestingSupabase(false);
   };
 
   const copySupabaseEnvVars = () => {
@@ -1154,7 +1168,42 @@ export const AdminPanelView: React.FC = () => {
       </div>
 
       {/* Live Public Broadcast Status Banner */}
-      {isSupabaseReady ? (
+      {isSupabaseReady && supabaseShareMode === 'local-only' ? (
+        <div className="bg-amber-50 border-2 border-amber-300 rounded-2xl p-4 sm:p-5 flex flex-col lg:flex-row lg:items-center justify-between gap-4 shadow-sm">
+          <div className="flex items-start gap-3">
+            <div className="p-2 rounded-xl bg-amber-100 text-amber-700 shrink-0">
+              <AlertCircle className="w-5 h-5" />
+            </div>
+            <div className="space-y-1">
+              <p className="text-xs sm:text-sm font-black text-amber-950">
+                Supabase Connected on THIS Phone/Browser Only — Other Visitors Cannot Connect to Supabase Yet!
+              </p>
+              <p className="text-[11px] sm:text-xs text-amber-900 leading-relaxed">
+                Your {currentAffairs.length} articles are stored in Supabase, but other users (like another visitor&apos;s phone) don&apos;t have your Supabase URL &amp; Anon Key in their browser yet. Click <strong>Copy VITE_SUPABASE Env Vars</strong>, add them to your <strong>Cloudflare Build Environment Variables</strong> (or <code>.env</code>), and redeploy so EVERY visitor sees all {currentAffairs.length} articles automatically.
+              </p>
+            </div>
+          </div>
+          <div className="flex flex-wrap items-center gap-2 shrink-0">
+            <button
+              type="button"
+              onClick={copySupabaseEnvVars}
+              className="px-3.5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs flex items-center gap-1.5 cursor-pointer shadow-xs"
+            >
+              {copiedEnv ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
+              <span>{copiedEnv ? 'Copied Env Vars!' : 'Copy VITE_SUPABASE Env Vars'}</span>
+            </button>
+            <button
+              type="button"
+              onClick={handleSyncAllToFirestore}
+              disabled={isSyncingFirestore}
+              className="px-3.5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs flex items-center gap-1.5 cursor-pointer shadow-xs disabled:opacity-60"
+            >
+              <RefreshCw className={`w-3.5 h-3.5 ${isSyncingFirestore ? 'animate-spin' : ''}`} />
+              <span>{isSyncingFirestore ? 'Syncing...' : 'Sync All Content'}</span>
+            </button>
+          </div>
+        </div>
+      ) : isSupabaseReady ? (
         <div className="bg-emerald-50 border border-emerald-200 rounded-2xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-2xs">
           <div className="flex items-center gap-3">
             <div className="p-2 rounded-xl bg-emerald-100 text-emerald-700 shrink-0">
@@ -1162,10 +1211,10 @@ export const AdminPanelView: React.FC = () => {
             </div>
             <div>
               <p className="text-xs font-bold text-emerald-900">
-                Supabase Public Cloud Broadcast Active{isFirebaseAdminReady ? ` + Firebase (${firebaseAuthEmail})` : ''}
+                Supabase Global Broadcast Active ({supabaseShareMode === 'env' ? 'Built-in Env Vars' : 'Shared Public Config'}){isFirebaseAdminReady ? ` + Firebase (${firebaseAuthEmail})` : ''}
               </p>
               <p className="text-[11px] text-emerald-700">
-                All Current Affairs, PDFs, Tests, Books, Exams &amp; Videos publish directly to Supabase so EVERY visitor (logged in with any ID or logged out) sees them immediately — no Firestore rules required.
+                All Current Affairs, PDFs, Tests, Books, Exams &amp; Videos publish directly to Supabase so EVERY visitor (logged in with any ID or logged out, on any device) sees them immediately.
               </p>
             </div>
           </div>
