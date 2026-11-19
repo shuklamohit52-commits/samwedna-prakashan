@@ -103,6 +103,11 @@ export interface Book {
   paperbackPrice: number;
   originalPrice: number;
   ebookAvailable: boolean;
+  ebookPrice?: number;
+  pdfUrl?: string;
+  pdfFileName?: string;
+  previewPagesLimit?: number;
+  productType?: 'hardcopy' | 'ebook' | 'magazine' | 'both';
   rating: number;
   reviewsCount: number;
   pages: number;
@@ -119,6 +124,8 @@ export interface Book {
   isTestSeries?: boolean;
   testsCount?: number;
   bannerImage?: string;
+  backCoverImage?: string;
+  galleryImages?: string[];
   inStock?: boolean;
   stockCount?: number;
   publisher?: string;
@@ -126,6 +133,22 @@ export interface Book {
   isHardCopyOnly?: boolean;
   isMagazine?: boolean;
   createdAt?: number | string;
+}
+
+export interface ReadingPdfSession {
+  title: string;
+  url: string;
+  pages: number;
+  author?: string;
+  bookId?: string;
+  book?: Book;
+  maxPreviewPages?: number;
+  isFullUnlocked?: boolean;
+  allowDownload?: boolean;
+  isAdminView?: boolean;
+  format?: 'E-Book' | 'Magazine' | 'Free PDF';
+  price?: number;
+  fileName?: string;
 }
 
 export interface CartItem {
@@ -153,6 +176,9 @@ export interface DownloadedBook {
   lastReadPage: number;
   category: string;
   coverGradient: string;
+  pdfUrl?: string;
+  pdfFileName?: string;
+  format?: 'E-Book' | 'Magazine';
 }
 
 export interface UserProfile {
@@ -173,6 +199,7 @@ export interface UserProfile {
   targetExam: string;
   subscription: UserSubscription;
   library: DownloadedBook[];
+  purchasedBookIds?: string[];
   savedCurrentAffairs?: string[];
   bookmarkedPdfs?: string[];
   testScores?: UserTestScore[];

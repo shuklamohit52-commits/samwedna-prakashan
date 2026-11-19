@@ -473,7 +473,36 @@ export const FreePdfsService = {
   }
 };
 
-// 5. BOOKS SERVICE
+// 5. BOOKS SERVICE & E-BOOK PDF STORAGE
+export const uploadPdfToSupabaseStorage = async (
+  file: File
+): Promise<{ url: string | null; error?: string }> => {
+  const client = supabaseClient || initSupabaseClient();
+  if (!client) {
+    return { url: null, error: 'Supabase not configured' };
+  }
+  try {
+    const cleanName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
+    const storagePath = `uploads/${Date.now()}_${cleanName}`;
+    const { error: uploadError } = await client.storage
+      .from('ebooks')
+      .upload(storagePath, file, {
+        contentType: 'application/pdf',
+        upsert: true
+      });
+    if (uploadError) {
+      return { url: null, error: uploadError.message };
+    }
+    const { data: pubData } = client.storage.from('ebooks').getPublicUrl(storagePath);
+    if (pubData?.publicUrl) {
+      return { url: pubData.publicUrl };
+    }
+    return { url: null, error: 'Could not obtain public URL from Supabase Storage.' };
+  } catch (e: any) {
+    return { url: null, error: e?.message || String(e) };
+  }
+};
+
 export const BooksService = {
   async upsert(book: Book): Promise<SupabaseOpResult> {
     const client = supabaseClient || initSupabaseClient();
@@ -487,10 +516,17 @@ export const BooksService = {
         hindiAuthor: book.hindiAuthor || null,
         category: book.category,
         subject: book.subject || 'Exam Special',
-        price: Number(book.paperbackPrice || 395),
-        paperbackPrice: Number(book.paperbackPrice || 395),
-        originalPrice: Number(book.originalPrice || 480),
+        price: Number(book.paperbackPrice || 0),
+        paperbackPrice: Number(book.paperbackPrice || 0),
+        originalPrice: Number(book.originalPrice || book.paperbackPrice || 199),
         ebookAvailable: Boolean(book.ebookAvailable),
+        ebookPrice: typeof book.ebookPrice === 'number' ? Number(book.ebookPrice) : null,
+        pdfUrl: book.pdfUrl || null,
+        pdfFileName: book.pdfFileName || null,
+        previewPagesLimit: Number(book.previewPagesLimit) || 5,
+        productType: book.productType || (book.isMagazine ? 'magazine' : (book.isHardCopyOnly ? 'hardcopy' : 'both')),
+        isHardCopyOnly: Boolean(book.isHardCopyOnly),
+        isMagazine: Boolean(book.isMagazine),
         rating: Number(book.rating) || 4.9,
         reviewsCount: Number(book.reviewsCount) || 100,
         pages: Number(book.pages) || 350,
@@ -498,7 +534,15 @@ export const BooksService = {
         badge: book.badge || null,
         description: book.description || '',
         hindiDescription: book.hindiDescription || null,
+        features: Array.isArray(book.features) ? book.features : [],
+        tableOfContents: Array.isArray(book.tableOfContents) ? book.tableOfContents : [],
+        samplePdfUrl: book.samplePdfUrl || '/samples/sample.pdf',
+        coverGradient: book.coverGradient || 'from-indigo-900 to-slate-900',
+        coverIcon: book.coverIcon || 'BookOpen',
+        patternYear: book.patternYear || '2026 Edition',
         bannerImage: book.bannerImage || null,
+        backCoverImage: book.backCoverImage || null,
+        galleryImages: Array.isArray(book.galleryImages) ? book.galleryImages : [],
         inStock: book.inStock !== false,
         stockCount: Number(book.stockCount) || 100,
         createdAt: toIsoTimestamp(book.createdAt)
@@ -509,13 +553,77 @@ export const BooksService = {
       return { success: false, message: e?.message || String(e) };
     }
   },
+  async delete(id: string): Promise<SupabaseOpResult> {
+    const client = supabaseClient || initSupabaseClient();
+    if (!client) return { success: false, message: 'Supabase not configured' };
+    try {
+      const { error } = await client.from('books').delete().or(`id.eq.${id},id.eq.${toDeterministicUuid(id)}`);
+      if (error) return { success: false, message: error.message };
+      return { success: true };
+    } catch (e: any) {
+      return { success: false, message: e?.message || String(e) };
+    }
+  },
   async fetchAll(): Promise<Book[]> {
     const client = supabaseClient || initSupabaseClient();
     if (!client) return [];
     try {
       const { data, error } = await client.from('books').select('*');
       if (error || !Array.isArray(data)) return [];
-      return data as Book[];
+      return data
+        .filter(r => r && r.id)
+        .map((r: any) => ({
+          ...r,
+          id: String(r.id),
+          title: r.title || '',
+          hindiTitle: r.hindiTitle ?? r.hindititle ?? undefined,
+          author: r.author || 'Samwedna Editorial Board',
+          hindiAuthor: r.hindiAuthor ?? r.hindiauthor ?? undefined,
+          category: r.category || 'All SSC Exam',
+          subject: r.subject || 'Exam Special',
+          paperbackPrice: Number(r.paperbackPrice ?? r.paperbackprice ?? r.price ?? 0),
+          originalPrice: Number(r.originalPrice ?? r.originalprice ?? r.paperbackPrice ?? r.price ?? 199),
+          ebookAvailable: Boolean(r.ebookAvailable ?? r.ebookavailable ?? Boolean(r.pdfUrl ?? r.pdfurl)),
+          ebookPrice:
+            r.ebookPrice !== undefined && r.ebookPrice !== null
+              ? Number(r.ebookPrice)
+              : r.ebookprice !== undefined && r.ebookprice !== null
+              ? Number(r.ebookprice)
+              : undefined,
+          pdfUrl: r.pdfUrl ?? r.pdfurl ?? undefined,
+          pdfFileName: r.pdfFileName ?? r.pdffilename ?? undefined,
+          previewPagesLimit: Number(r.previewPagesLimit ?? r.previewpageslimit ?? 5) || 5,
+          productType: r.productType ?? r.producttype ?? undefined,
+          isHardCopyOnly: Boolean(r.isHardCopyOnly ?? r.ishardcopyonly ?? false),
+          isMagazine: Boolean(r.isMagazine ?? r.ismagazine ?? false),
+          rating: Number(r.rating) || 4.8,
+          reviewsCount: Number(r.reviewsCount ?? r.reviewscount ?? 100),
+          pages: Number(r.pages) || 200,
+          language: r.language || 'Hindi',
+          badge: r.badge ?? undefined,
+          description: r.description || '',
+          hindiDescription: r.hindiDescription ?? r.hindidescription ?? undefined,
+          features: Array.isArray(r.features) ? r.features : ['Authentic Samwedna Publication'],
+          tableOfContents: Array.isArray(r.tableOfContents)
+            ? r.tableOfContents
+            : Array.isArray(r.tableofcontents)
+            ? r.tableofcontents
+            : [],
+          samplePdfUrl: r.samplePdfUrl ?? r.samplepdfurl ?? '/samples/sample.pdf',
+          coverGradient: r.coverGradient ?? r.covergradient ?? 'from-indigo-900 to-slate-900',
+          coverIcon: r.coverIcon ?? r.covericon ?? 'BookOpen',
+          patternYear: r.patternYear ?? r.patternyear ?? '2026 Edition',
+          bannerImage: r.bannerImage ?? r.bannerimage ?? undefined,
+          backCoverImage: r.backCoverImage ?? r.backcoverimage ?? undefined,
+          galleryImages: Array.isArray(r.galleryImages)
+            ? r.galleryImages
+            : Array.isArray(r.galleryimages)
+            ? r.galleryimages
+            : [],
+          inStock: r.inStock !== false && r.instock !== false,
+          stockCount: Number(r.stockCount ?? r.stockcount ?? 100),
+          createdAt: r.createdAt ?? r.createdat ?? r.created_at ?? undefined
+        })) as Book[];
     } catch {
       return [];
     }
@@ -862,6 +970,13 @@ ALTER TABLE books ADD COLUMN IF NOT EXISTS "patternYear" TEXT;
 ALTER TABLE books ADD COLUMN IF NOT EXISTS "isTestSeries" BOOLEAN DEFAULT false;
 ALTER TABLE books ADD COLUMN IF NOT EXISTS "testsCount" INTEGER;
 ALTER TABLE books ADD COLUMN IF NOT EXISTS "bannerImage" TEXT;
+ALTER TABLE books ADD COLUMN IF NOT EXISTS "backCoverImage" TEXT;
+ALTER TABLE books ADD COLUMN IF NOT EXISTS "galleryImages" TEXT[];
+ALTER TABLE books ADD COLUMN IF NOT EXISTS "ebookPrice" NUMERIC;
+ALTER TABLE books ADD COLUMN IF NOT EXISTS "pdfUrl" TEXT;
+ALTER TABLE books ADD COLUMN IF NOT EXISTS "pdfFileName" TEXT;
+ALTER TABLE books ADD COLUMN IF NOT EXISTS "previewPagesLimit" INTEGER DEFAULT 5;
+ALTER TABLE books ADD COLUMN IF NOT EXISTS "productType" TEXT;
 ALTER TABLE books ADD COLUMN IF NOT EXISTS "inStock" BOOLEAN DEFAULT true;
 ALTER TABLE books ADD COLUMN IF NOT EXISTS "stockCount" INTEGER DEFAULT 100;
 ALTER TABLE books ADD COLUMN IF NOT EXISTS publisher TEXT;
@@ -979,7 +1094,21 @@ DROP POLICY IF EXISTS "Public Full Access" ON app_settings;
 DROP POLICY IF EXISTS "Public Read Access" ON app_settings;
 CREATE POLICY "Public Full Access" ON app_settings FOR ALL TO public USING (true) WITH CHECK (true);
 
--- 12. Notify PostgREST to reload schema cache immediately
+-- 12. Optional Public Storage Bucket for E-Book & Magazine PDFs
+INSERT INTO storage.buckets (id, name, public)
+VALUES ('ebooks', 'ebooks', true)
+ON CONFLICT (id) DO NOTHING;
+
+DROP POLICY IF EXISTS "Public Ebooks Bucket Read" ON storage.objects;
+CREATE POLICY "Public Ebooks Bucket Read" ON storage.objects FOR SELECT TO public USING (bucket_id = 'ebooks');
+
+DROP POLICY IF EXISTS "Public Ebooks Bucket Upload" ON storage.objects;
+CREATE POLICY "Public Ebooks Bucket Upload" ON storage.objects FOR INSERT TO public WITH CHECK (bucket_id = 'ebooks');
+
+DROP POLICY IF EXISTS "Public Ebooks Bucket Update" ON storage.objects;
+CREATE POLICY "Public Ebooks Bucket Update" ON storage.objects FOR UPDATE TO public USING (bucket_id = 'ebooks');
+
+-- 13. Notify PostgREST to reload schema cache immediately
 NOTIFY pgrst, 'reload schema';
 `;
 };
@@ -1191,11 +1320,20 @@ export const syncAllDataToSupabase = async (payload: {
         hindiAuthor: b.hindiAuthor || null,
         category: b.category,
         subject: b.subject || 'Exam Special',
-        price: Number(b.paperbackPrice || b.price || 395),
-        paperbackPrice: Number(b.paperbackPrice || b.price || 395),
-        originalPrice: Number(b.originalPrice || 480),
-        discount: Math.round(((Number(b.originalPrice || 480) - Number(b.paperbackPrice || 395)) / Number(b.originalPrice || 480)) * 100),
+        price: Number(b.paperbackPrice || b.price || 0),
+        paperbackPrice: Number(b.paperbackPrice || b.price || 0),
+        originalPrice: Number(b.originalPrice || b.paperbackPrice || 199),
+        discount: Number(b.originalPrice || 0) > 0
+          ? Math.round(((Number(b.originalPrice) - Number(b.paperbackPrice || 0)) / Number(b.originalPrice)) * 100)
+          : 0,
         ebookAvailable: Boolean(b.ebookAvailable),
+        ebookPrice: typeof b.ebookPrice === 'number' ? Number(b.ebookPrice) : null,
+        pdfUrl: b.pdfUrl || null,
+        pdfFileName: b.pdfFileName || null,
+        previewPagesLimit: Number(b.previewPagesLimit) || 5,
+        productType: b.productType || (b.isMagazine ? 'magazine' : (b.isHardCopyOnly ? 'hardcopy' : 'both')),
+        isHardCopyOnly: Boolean(b.isHardCopyOnly),
+        isMagazine: Boolean(b.isMagazine),
         rating: Number(b.rating) || 4.9,
         reviewsCount: Number(b.reviewsCount) || 100,
         pages: Number(b.pages) || 350,
@@ -1203,7 +1341,15 @@ export const syncAllDataToSupabase = async (payload: {
         badge: b.badge || null,
         description: b.description || '',
         hindiDescription: b.hindiDescription || null,
+        features: Array.isArray(b.features) ? b.features : [],
+        tableOfContents: Array.isArray(b.tableOfContents) ? b.tableOfContents : [],
+        samplePdfUrl: b.samplePdfUrl || '/samples/sample.pdf',
+        coverGradient: b.coverGradient || 'from-indigo-900 to-slate-900',
+        coverIcon: b.coverIcon || 'BookOpen',
+        patternYear: b.patternYear || '2026 Edition',
         bannerImage: b.bannerImage || null,
+        backCoverImage: b.backCoverImage || null,
+        galleryImages: Array.isArray(b.galleryImages) ? b.galleryImages : [],
         inStock: b.inStock !== false,
         stockCount: Number(b.stockCount) || 100,
         createdAt: toIsoTimestamp(b.createdAt)

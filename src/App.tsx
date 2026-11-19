@@ -87,12 +87,7 @@ const MainLayout: React.FC = () => {
       </main>
 
       {/* Modals */}
-      {selectedBook && (
-        <BookDetailModal 
-          book={selectedBook} 
-          onClose={() => setSelectedBook(null)} 
-        />
-      )}
+      <BookDetailModal />
       <CBTTestModal />
       <EbookReaderModal />
 

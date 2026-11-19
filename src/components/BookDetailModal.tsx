@@ -1,374 +1,550 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useApp } from '../context/AppContext';
-import { 
-  X, 
-  ShoppingBag, 
-  Download, 
-  Star, 
-  BookOpen, 
-  Check, 
-  ShieldCheck, 
-  Share2, 
-  Eye, 
-  Layers, 
-  FileText 
+import {
+  X,
+  Star,
+  BookOpen,
+  FileText,
+  ShoppingCart,
+  CheckCircle,
+  Download,
+  ShieldCheck,
+  Clock,
+  Share2,
+  ChevronLeft,
+  ChevronRight,
+  ZoomIn,
+  Lock,
+  Sparkles,
+  Image as ImageIcon,
+  Check
 } from 'lucide-react';
-import { Book } from '../types';
 import { BookImage } from './BookImage';
+import {
+  getBookGallerySlides,
+  getBookDigitalPrice,
+  getDigitalFormatForBook,
+  hasDigitalVersion,
+  hasHardCopyVersion,
+  triggerPdfOfflineDownload
+} from '../utils/bookHelpers';
 
-interface BookDetailModalProps {
-  book: Book;
-  onClose: () => void;
-}
+export const BookDetailModal: React.FC = () => {
+  const {
+    selectedBook,
+    setSelectedBook,
+    addToCart,
+    setCurrentView,
+    isAdmin,
+    hasPurchasedBook,
+    openBookPdfReader,
+    buyDigitalBookNow,
+    shareBookLink,
+    showToast
+  } = useApp();
 
-export const BookDetailModal: React.FC<BookDetailModalProps> = ({ book, onClose }) => {
-  const { addToCart, setCurrentView, user, downloadBookToLibrary, showToast } = useApp();
-  const [activeTab, setActiveTab] = useState<'overview' | 'toc' | 'sample'>('overview');
+  const [activeSlideIdx, setActiveSlideIdx] = useState(0);
+  const [isLightboxOpen, setIsLightboxOpen] = useState(false);
+  const [linkCopied, setLinkCopied] = useState(false);
+  const [isDownloadingPdf, setIsDownloadingPdf] = useState(false);
 
-  const discountPercent = Math.round(((book.originalPrice - book.paperbackPrice) / book.originalPrice) * 100);
+  useEffect(() => {
+    setActiveSlideIdx(0);
+    setIsLightboxOpen(false);
+    setLinkCopied(false);
+  }, [selectedBook?.id]);
 
-  const handleBuyPaperback = () => {
-    addToCart(book, 'Paperback');
-    onClose();
-    setCurrentView('cart');
-    window.scrollTo({ top: 0, behavior: 'smooth' });
+  if (!selectedBook) return null;
+
+  const slides = getBookGallerySlides(selectedBook);
+  const activeSlide = slides[activeSlideIdx] || null;
+  const supportsHardCopy = hasHardCopyVersion(selectedBook);
+  const supportsDigital = hasDigitalVersion(selectedBook);
+  const digitalFormat = getDigitalFormatForBook(selectedBook);
+  const digitalPrice = getBookDigitalPrice(selectedBook);
+  const isPurchased = hasPurchasedBook(selectedBook.id);
+  const canAccessFullPdf = Boolean(isAdmin || isPurchased);
+  const previewPagesLimit = selectedBook.previewPagesLimit || 5;
+
+  const discountPercentage =
+    selectedBook.originalPrice > selectedBook.paperbackPrice && selectedBook.paperbackPrice > 0
+      ? Math.round(((selectedBook.originalPrice - selectedBook.paperbackPrice) / selectedBook.originalPrice) * 100)
+      : 0;
+
+  const handleShare = async () => {
+    await shareBookLink(selectedBook);
+    setLinkCopied(true);
+    setTimeout(() => setLinkCopied(false), 2400);
   };
 
-  const handlePdfDownload = () => {
-    // Exact requirement: "PDF download button which will navigate to subscription pricing page"
-    if (!user || user.subscription.planId === 'free' || user.subscription.status !== 'Active') {
-      showToast('PDF E-Book downloads are included with our Subscription Plans. Redirecting to Pricing...', 'info');
-      onClose();
-      setCurrentView('signup');
-      window.scrollTo({ top: 0, behavior: 'smooth' });
+  const handleDownloadOfflinePdf = async () => {
+    const pdfSource = selectedBook.pdfUrl || selectedBook.samplePdfUrl;
+    if (!pdfSource || pdfSource === '/samples/sample.pdf') {
+      showToast('Full PDF file is being prepared by BooksBoon Editorial. Please try again shortly.', 'info');
+      return;
+    }
+    setIsDownloadingPdf(true);
+    const res = await triggerPdfOfflineDownload(pdfSource, selectedBook.title, selectedBook.pdfFileName);
+    setIsDownloadingPdf(false);
+    if (res.ok) {
+      showToast(`Downloading "${selectedBook.title}" PDF for offline reading!`, 'success');
     } else {
-      const result = downloadBookToLibrary(book);
-      if (result.success) {
-        onClose();
-        setCurrentView('account');
-      }
+      showToast(res.error || 'Could not download PDF file.', 'error');
     }
   };
 
-  const handleShare = () => {
-    if (navigator.clipboard) {
-      navigator.clipboard.writeText(window.location.href);
-      showToast('Book details link copied to clipboard!', 'info');
-    }
+  const goPrevSlide = () => {
+    if (slides.length <= 1) return;
+    setActiveSlideIdx((prev) => (prev - 1 + slides.length) % slides.length);
+  };
+
+  const goNextSlide = () => {
+    if (slides.length <= 1) return;
+    setActiveSlideIdx((prev) => (prev + 1) % slides.length);
   };
 
   return (
-    <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-900/70 backdrop-blur-xs flex items-center justify-center p-3 sm:p-6 animate-fadeIn">
-      <div 
-        className="relative bg-white rounded-2xl max-w-4xl w-full shadow-2xl border border-slate-200 overflow-hidden my-8"
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6 bg-slate-950/75 backdrop-blur-sm animate-fadeIn overflow-y-auto"
+      onClick={() => setSelectedBook(null)}
+    >
+      <div
+        className="relative w-full max-w-5xl bg-white rounded-3xl shadow-2xl border border-slate-200 overflow-hidden my-auto max-h-[92vh] flex flex-col"
         onClick={(e) => e.stopPropagation()}
       >
-        {/* Modal Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 bg-slate-50/70">
-          <div className="flex items-center gap-2 text-xs text-slate-500 font-medium">
-            <span>{book.category}</span>
-            <span>/</span>
-            <span className="text-slate-900 font-semibold">{book.patternYear}</span>
-          </div>
+        {/* Top Action Controls */}
+        <div className="absolute top-3.5 right-3.5 z-20 flex items-center gap-2">
+          <button
+            onClick={handleShare}
+            className="inline-flex items-center gap-1.5 px-3 py-2 rounded-full bg-white/95 hover:bg-indigo-50 text-slate-700 hover:text-indigo-700 border border-slate-200 shadow-sm text-xs font-bold transition-colors cursor-pointer"
+            title="Share direct product link"
+          >
+            {linkCopied ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Share2 className="w-3.5 h-3.5" />}
+            <span>{linkCopied ? 'Link Copied' : 'Share Link'}</span>
+          </button>
+          <button
+            onClick={() => setSelectedBook(null)}
+            className="p-2 rounded-full bg-white/95 hover:bg-slate-100 text-slate-600 hover:text-slate-900 border border-slate-200 transition-colors shadow-sm cursor-pointer"
+            aria-label="Close product details"
+          >
+            <X className="w-5 h-5" />
+          </button>
+        </div>
 
-          <div className="flex items-center gap-2">
+        <div className="overflow-y-auto p-5 sm:p-8">
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-7">
+            {/* Left Column: Interactive Book Cover, Back Cover & Interior Pages Gallery */}
+            <div className="lg:col-span-5 flex flex-col space-y-3.5">
+              {/* Main Active Image Stage */}
+              <div className="relative rounded-2xl overflow-hidden bg-slate-100 border border-slate-200 shadow-md group aspect-[3/4]">
+                {activeSlide ? (
+                  <img
+                    src={activeSlide.url}
+                    alt={`${selectedBook.title} - ${activeSlide.label}`}
+                    referrerPolicy="no-referrer"
+                    onClick={() => setIsLightboxOpen(true)}
+                    className="w-full h-full object-contain bg-slate-50 cursor-zoom-in transition-transform duration-300"
+                  />
+                ) : (
+                  <BookImage
+                    book={selectedBook}
+                    aspectRatio="aspect-[3/4]"
+                    className="w-full h-full object-cover"
+                    containerClassName="w-full h-full"
+                  />
+                )}
+
+                {/* Active View Label Pill */}
+                {activeSlide && (
+                  <div className="absolute top-3 left-3 px-2.5 py-1 rounded-lg bg-slate-950/80 text-white text-[11px] font-bold backdrop-blur-xs flex items-center gap-1.5">
+                    <ImageIcon className="w-3.5 h-3.5 text-amber-300" />
+                    <span>{activeSlide.label}</span>
+                    <span className="text-slate-300 font-mono text-[10px]">
+                      ({activeSlideIdx + 1}/{slides.length})
+                    </span>
+                  </div>
+                )}
+
+                {/* Zoom Trigger */}
+                {activeSlide && (
+                  <button
+                    onClick={() => setIsLightboxOpen(true)}
+                    className="absolute bottom-3 right-3 p-2 rounded-xl bg-slate-950/75 hover:bg-slate-950 text-white backdrop-blur-xs transition-colors cursor-pointer"
+                    title="View Full Page Image"
+                  >
+                    <ZoomIn className="w-4 h-4" />
+                  </button>
+                )}
+
+                {/* Prev / Next Navigation Arrows */}
+                {slides.length > 1 && (
+                  <>
+                    <button
+                      onClick={goPrevSlide}
+                      className="absolute left-2.5 top-1/2 -translate-y-1/2 p-2 rounded-full bg-white/90 hover:bg-white text-slate-900 shadow-md border border-slate-200 cursor-pointer transition-all"
+                      aria-label="Previous book image"
+                    >
+                      <ChevronLeft className="w-4 h-4" />
+                    </button>
+                    <button
+                      onClick={goNextSlide}
+                      className="absolute right-2.5 top-1/2 -translate-y-1/2 p-2 rounded-full bg-white/90 hover:bg-white text-slate-900 shadow-md border border-slate-200 cursor-pointer transition-all"
+                      aria-label="Next book image"
+                    >
+                      <ChevronRight className="w-4 h-4" />
+                    </button>
+                  </>
+                )}
+              </div>
+
+              {/* Thumbnail Strip (Front Cover, Back Cover, Inside Pages 1–4) */}
+              {slides.length > 1 && (
+                <div className="grid grid-cols-3 sm:grid-cols-6 lg:grid-cols-3 gap-2">
+                  {slides.map((slide, idx) => {
+                    const isSelected = idx === activeSlideIdx;
+                    return (
+                      <button
+                        key={slide.id}
+                        type="button"
+                        onClick={() => setActiveSlideIdx(idx)}
+                        className={`relative rounded-xl overflow-hidden border-2 transition-all cursor-pointer text-left bg-slate-50 ${
+                          isSelected
+                            ? 'border-indigo-600 ring-2 ring-indigo-500/20 shadow-sm'
+                            : 'border-slate-200 hover:border-slate-400 opacity-80 hover:opacity-100'
+                        }`}
+                      >
+                        <div className="aspect-[3/4] w-full overflow-hidden">
+                          <img
+                            src={slide.url}
+                            alt={slide.label}
+                            referrerPolicy="no-referrer"
+                            className="w-full h-full object-cover"
+                          />
+                        </div>
+                        <div className="px-1.5 py-1 bg-slate-900/90 text-white text-[9px] font-bold text-center truncate">
+                          {slide.label}
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+
+              {/* Quick Preview PDF Button under Gallery */}
+              {supportsDigital && (
+                <button
+                  onClick={() => openBookPdfReader(selectedBook)}
+                  className="w-full py-2.5 px-4 rounded-xl bg-slate-900 hover:bg-indigo-600 text-white font-bold text-xs flex items-center justify-center gap-2 transition-colors cursor-pointer shadow-sm"
+                >
+                  <BookOpen className="w-4 h-4 text-amber-300" />
+                  <span>
+                    {isAdmin
+                      ? `Admin Full PDF Preview (All ${selectedBook.pages} Pages)`
+                      : isPurchased
+                      ? 'Open Full Purchased PDF Online'
+                      : `Preview First ${previewPagesLimit} Pages Free (PDF)`}
+                  </span>
+                </button>
+              )}
+
+              {/* Publication Specifications (Unboxed clean hairline grid) */}
+              <div className="grid grid-cols-3 gap-2 pt-2 border-t border-slate-200 text-center">
+                <div>
+                  <span className="text-[10px] text-slate-400 uppercase font-semibold block">Pages</span>
+                  <span className="text-xs font-extrabold text-slate-800 tabular-nums">{selectedBook.pages}</span>
+                </div>
+                <div className="border-x border-slate-200">
+                  <span className="text-[10px] text-slate-400 uppercase font-semibold block">Medium</span>
+                  <span className="text-xs font-extrabold text-slate-800">{selectedBook.language}</span>
+                </div>
+                <div>
+                  <span className="text-[10px] text-slate-400 uppercase font-semibold block">Edition</span>
+                  <span className="text-xs font-extrabold text-slate-800">{selectedBook.patternYear || '2026'}</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Right Column: Details, Pricing Cards & Instant Purchase Actions */}
+            <div className="lg:col-span-7 flex flex-col space-y-5 pr-0 lg:pr-4">
+              <div>
+                <div className="flex flex-wrap items-center gap-2 mb-2">
+                  <span className="text-xs font-bold text-indigo-700 bg-indigo-50 border border-indigo-200/80 px-2.5 py-0.5 rounded-md">
+                    {selectedBook.category}
+                  </span>
+                  {selectedBook.isMagazine || selectedBook.productType === 'magazine' ? (
+                    <span className="text-xs font-bold text-rose-700 bg-rose-50 border border-rose-200/80 px-2.5 py-0.5 rounded-md">
+                      Magazine Edition
+                    </span>
+                  ) : null}
+                  {selectedBook.pdfUrl && (
+                    <span className="text-xs font-bold text-emerald-700 bg-emerald-50 border border-emerald-200/80 px-2.5 py-0.5 rounded-md">
+                      PDF Ready
+                    </span>
+                  )}
+                  <div className="flex items-center gap-1 text-amber-500 text-xs font-bold ml-auto sm:ml-1">
+                    <Star className="w-3.5 h-3.5 fill-amber-400" />
+                    <span className="tabular-nums">{selectedBook.rating}</span>
+                    <span className="text-slate-400 font-normal">({selectedBook.reviewsCount} reviews)</span>
+                  </div>
+                </div>
+
+                <h2 className="text-xl sm:text-2xl font-black text-slate-900 font-display leading-snug">
+                  {selectedBook.title}
+                </h2>
+                {selectedBook.hindiTitle && (
+                  <p className="text-sm font-bold text-indigo-800 mt-1">{selectedBook.hindiTitle}</p>
+                )}
+                <p className="text-xs sm:text-sm text-slate-500 mt-1">
+                  By <span className="font-semibold text-slate-700">{selectedBook.author}</span>
+                  {selectedBook.hindiAuthor ? ` · ${selectedBook.hindiAuthor}` : ''}
+                </p>
+              </div>
+
+              <p className="text-sm text-slate-600 leading-relaxed">{selectedBook.description}</p>
+              {selectedBook.hindiDescription && (
+                <p className="text-xs text-slate-600 bg-amber-50/50 border-l-2 border-amber-400 pl-3 py-1.5 leading-relaxed">
+                  {selectedBook.hindiDescription}
+                </p>
+              )}
+
+              {/* Purchase Options Grid: Hard Copy + E-Book/Magazine PDF */}
+              <div className="space-y-3">
+                {/* 1. Hard Copy Paperback Option */}
+                {supportsHardCopy && (
+                  <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200 space-y-3">
+                    <div className="flex items-center justify-between flex-wrap gap-2">
+                      <div>
+                        <span className="text-[11px] font-black uppercase tracking-wider text-slate-500 block">
+                          Printed Hard Copy (Paperback)
+                        </span>
+                        <div className="flex items-baseline gap-2 mt-0.5">
+                          <span className="text-2xl font-black text-slate-900 tabular-nums">
+                            ₹{selectedBook.paperbackPrice}
+                          </span>
+                          {selectedBook.originalPrice > selectedBook.paperbackPrice && (
+                            <span className="text-sm text-slate-400 line-through tabular-nums">
+                              ₹{selectedBook.originalPrice}
+                            </span>
+                          )}
+                          {discountPercentage > 0 && (
+                            <span className="text-xs font-bold text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded-md tabular-nums">
+                              Save {discountPercentage}%
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                      <span className="text-[11px] font-semibold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2.5 py-1 rounded-lg">
+                        In Stock · India Post Dispatch
+                      </span>
+                    </div>
+
+                    <div className="flex flex-wrap gap-2.5">
+                      <button
+                        onClick={() => {
+                          addToCart(selectedBook, 'Paperback');
+                          setSelectedBook(null);
+                          setCurrentView('checkout');
+                        }}
+                        className="flex-1 min-w-[160px] py-2.5 px-4 rounded-xl bg-amber-400 hover:bg-amber-300 text-slate-950 font-black text-xs flex items-center justify-center gap-2 transition-colors shadow-xs cursor-pointer"
+                      >
+                        <ShoppingCart className="w-4 h-4" />
+                        <span>Buy Hard Copy (₹{selectedBook.paperbackPrice})</span>
+                      </button>
+                      <button
+                        onClick={() => addToCart(selectedBook, 'Paperback')}
+                        className="py-2.5 px-4 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs flex items-center justify-center gap-2 transition-colors cursor-pointer"
+                      >
+                        <span>Add to Cart</span>
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {/* 2. Digital E-Book / Magazine PDF Option (5-Page Preview + Admin-Set Price + Offline Download) */}
+                {supportsDigital && (
+                  <div className="p-4 rounded-2xl bg-indigo-50/70 border border-indigo-200 space-y-3">
+                    <div className="flex items-start justify-between gap-3 flex-wrap">
+                      <div>
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-[11px] font-black uppercase tracking-wider text-indigo-700">
+                            Digital {digitalFormat} PDF
+                          </span>
+                          {isPurchased && (
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-emerald-600 text-white text-[10px] font-black uppercase">
+                              <CheckCircle className="w-3 h-3" /> Purchased
+                            </span>
+                          )}
+                          {isAdmin && !isPurchased && (
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-amber-400 text-slate-950 text-[10px] font-black uppercase">
+                              <ShieldCheck className="w-3 h-3" /> Admin Access
+                            </span>
+                          )}
+                        </div>
+                        <div className="flex items-baseline gap-2 mt-0.5">
+                          <span className="text-2xl font-black text-indigo-950 tabular-nums">₹{digitalPrice}</span>
+                          <span className="text-xs text-indigo-700 font-semibold">
+                            Read Online + Offline PDF Download
+                          </span>
+                        </div>
+                      </div>
+                      <div className="text-[11px] text-slate-600 flex items-center gap-1 font-medium">
+                        {canAccessFullPdf ? (
+                          <span className="text-emerald-700 font-bold">All {selectedBook.pages} Pages Unlocked</span>
+                        ) : (
+                          <span className="inline-flex items-center gap-1 text-amber-800 bg-amber-100 border border-amber-200 px-2 py-0.5 rounded-md font-bold">
+                            <Lock className="w-3 h-3" /> Free {previewPagesLimit}-Page Preview
+                          </span>
+                        )}
+                      </div>
+                    </div>
+
+                    {canAccessFullPdf ? (
+                      <div className="flex flex-wrap gap-2.5">
+                        <button
+                          onClick={() => openBookPdfReader(selectedBook)}
+                          className="flex-1 min-w-[160px] py-2.5 px-4 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs flex items-center justify-center gap-2 transition-colors cursor-pointer"
+                        >
+                          <BookOpen className="w-4 h-4" />
+                          <span>{isAdmin ? 'Read Complete PDF (Admin)' : 'Read Complete PDF Online'}</span>
+                        </button>
+                        <button
+                          onClick={handleDownloadOfflinePdf}
+                          disabled={isDownloadingPdf}
+                          className="py-2.5 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs flex items-center justify-center gap-1.5 transition-colors cursor-pointer disabled:opacity-60"
+                        >
+                          <Download className="w-4 h-4" />
+                          <span>{isDownloadingPdf ? 'Downloading...' : 'Download Offline PDF'}</span>
+                        </button>
+                      </div>
+                    ) : (
+                      <div className="flex flex-wrap gap-2.5">
+                        <button
+                          onClick={() => buyDigitalBookNow(selectedBook)}
+                          className="flex-1 min-w-[170px] py-2.5 px-4 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-black text-xs flex items-center justify-center gap-2 transition-colors shadow-sm cursor-pointer tabular-nums"
+                        >
+                          <Sparkles className="w-4 h-4 text-amber-300" />
+                          <span>Buy {digitalFormat} PDF (₹{digitalPrice})</span>
+                        </button>
+                        <button
+                          onClick={() => openBookPdfReader(selectedBook)}
+                          className="py-2.5 px-4 rounded-xl bg-white hover:bg-indigo-100 text-indigo-800 border border-indigo-300 font-bold text-xs flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
+                        >
+                          <FileText className="w-4 h-4" />
+                          <span>Preview {previewPagesLimit} Pages</span>
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+
+              {/* Key Features & Syllabus */}
+              {selectedBook.features && selectedBook.features.length > 0 && (
+                <div>
+                  <h4 className="text-xs font-black uppercase tracking-wider text-slate-900 mb-2.5 flex items-center gap-1.5">
+                    <CheckCircle className="w-4 h-4 text-emerald-500" />
+                    Key Highlights &amp; Features
+                  </h4>
+                  <ul className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    {selectedBook.features.map((feat, idx) => (
+                      <li key={idx} className="flex items-start gap-2 text-xs text-slate-700">
+                        <span className="w-1.5 h-1.5 rounded-full bg-indigo-600 mt-1.5 shrink-0" />
+                        <span>{feat}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+
+              {/* Table of Contents */}
+              {selectedBook.tableOfContents && selectedBook.tableOfContents.length > 0 && (
+                <div className="bg-slate-50 rounded-xl p-4 border border-slate-200/80">
+                  <h4 className="text-xs font-black uppercase tracking-wider text-slate-900 mb-2 flex items-center gap-1.5">
+                    <FileText className="w-4 h-4 text-indigo-600" />
+                    Table of Contents
+                  </h4>
+                  <div className="space-y-1.5 max-h-36 overflow-y-auto pr-2">
+                    {selectedBook.tableOfContents.map((chap, idx) => (
+                      <div key={idx} className="text-xs text-slate-600 py-1 border-b border-slate-200/60 last:border-0">
+                        {chap}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Trust Badges */}
+              <div className="flex flex-wrap items-center justify-between gap-2 pt-3 border-t border-slate-200 text-xs text-slate-500">
+                <div className="flex items-center gap-4 flex-wrap">
+                  <span className="flex items-center gap-1">
+                    <ShieldCheck className="w-4 h-4 text-emerald-500" /> Official Publisher
+                  </span>
+                  <span className="flex items-center gap-1">
+                    <Clock className="w-4 h-4 text-indigo-500" /> Instant PDF Unlock
+                  </span>
+                </div>
+                <button
+                  onClick={handleShare}
+                  className="text-indigo-600 hover:text-indigo-800 font-bold inline-flex items-center gap-1 cursor-pointer"
+                >
+                  <Share2 className="w-3.5 h-3.5" />
+                  <span>{linkCopied ? 'Product Link Copied!' : 'Share This Product'}</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Fullscreen Lightbox for Inspecting Front/Back Cover & Interior Book Pages */}
+      {isLightboxOpen && activeSlide && (
+        <div
+          className="fixed inset-0 z-[70] bg-slate-950/95 flex flex-col items-center justify-center p-4"
+          onClick={(e) => {
+            e.stopPropagation();
+            setIsLightboxOpen(false);
+          }}
+        >
+          <div className="w-full max-w-4xl flex items-center justify-between text-white mb-3">
+            <span className="text-xs sm:text-sm font-bold">
+              {selectedBook.title} — <span className="text-amber-300">{activeSlide.label}</span> ({activeSlideIdx + 1}/{slides.length})
+            </span>
             <button
-              onClick={handleShare}
-              className="p-2 text-slate-500 hover:text-slate-800 hover:bg-slate-200/60 rounded-lg transition-colors"
-              title="Share Book"
-            >
-              <Share2 className="w-4 h-4" />
-            </button>
-            <button
-              onClick={onClose}
-              className="p-2 text-slate-500 hover:text-slate-800 hover:bg-slate-200/60 rounded-lg transition-colors"
-              title="Close"
+              onClick={() => setIsLightboxOpen(false)}
+              className="p-2 rounded-full bg-white/10 hover:bg-white/20 text-white cursor-pointer"
             >
               <X className="w-5 h-5" />
             </button>
           </div>
-        </div>
-
-        {/* Modal Body */}
-        <div className="p-6 md:p-8 max-h-[75vh] overflow-y-auto">
-          <div className="grid grid-cols-1 md:grid-cols-12 gap-8 items-start">
-            
-            {/* Left: Book Cover Graphic */}
-            <div className="md:col-span-5 flex flex-col items-center">
-              <div className="relative group w-full max-w-[280px]">
-                {book.bannerImage ? (
-                  <div className="rounded-2xl overflow-hidden shadow-2xl border-2 border-slate-200 bg-slate-950 relative group">
-                    <BookImage 
-                      book={book} 
-                      className="w-full h-auto object-cover transform transition-transform duration-300 group-hover:scale-105"
-                    />
-                    <div className="absolute bottom-0 inset-x-0 bg-gradient-to-t from-black/80 via-black/40 to-transparent p-3 text-white flex items-center justify-between">
-                      <span className="text-[10px] font-bold text-cyan-300 uppercase tracking-wider">
-                        Official Edition
-                      </span>
-                      <span className="text-[10px] bg-white/20 px-2 py-0.5 rounded font-mono">
-                        {book.language}
-                      </span>
-                    </div>
-                  </div>
-                ) : (
-                  /* 3D Book styling container */
-                  <div className={`aspect-3/4 rounded-xl bg-gradient-to-br ${book.coverGradient} p-6 text-white shadow-xl flex flex-col justify-between border-r-4 border-b-4 border-slate-950/40 relative overflow-hidden transform transition-transform group-hover:scale-[1.02]`}>
-                    {/* Spine effect */}
-                    <div className="absolute left-0 top-0 bottom-0 w-3 bg-white/10 border-r border-white/20"></div>
-
-                    {/* Header stamp */}
-                    <div className="pl-2">
-                      <div className="flex items-center justify-between text-[11px] font-bold tracking-widest text-cyan-200 uppercase">
-                        <span>Samwedna Prakashan</span>
-                        <span className="bg-white/20 px-2 py-0.5 rounded text-[10px] text-white font-mono">{book.language}</span>
-                      </div>
-                      <div className="text-[10px] text-slate-300 mt-1">{book.patternYear}</div>
-                    </div>
-
-                    {/* Book Title Center */}
-                    <div className="pl-2 my-auto py-4">
-                      <div className="w-10 h-10 rounded-lg bg-white/10 flex items-center justify-center mb-3">
-                        <BookOpen className="w-5 h-5 text-cyan-300" />
-                      </div>
-                      <h3 className="text-xl font-extrabold font-display leading-tight tracking-tight drop-shadow-xs">
-                        {book.title}
-                      </h3>
-                      {book.hindiTitle && (
-                        <p className="text-xs text-slate-200 mt-1 font-medium line-clamp-2">
-                          {book.hindiTitle}
-                        </p>
-                      )}
-                    </div>
-
-                    {/* Footer tags */}
-                    <div className="pl-2 border-t border-white/20 pt-3">
-                      <div className="flex items-center justify-between text-[11px]">
-                        <span className="text-slate-300">{book.pages} Pages</span>
-                        {book.isTestSeries && (
-                          <span className="font-bold text-amber-300">{book.testsCount} Mock Tests Included</span>
-                        )}
-                      </div>
-                      <p className="text-[10px] text-slate-400 mt-0.5 truncate">By {book.author}</p>
-                    </div>
-                  </div>
-                )}
-
-                {/* Badge if present */}
-                {book.badge && (
-                  <div className="absolute -top-3 -right-3 bg-amber-500 text-slate-950 font-extrabold text-[11px] px-3 py-1 rounded-full shadow-md uppercase tracking-wide">
-                    {book.badge}
-                  </div>
-                )}
-              </div>
-
-              {/* Book Metadata table */}
-              <div className="w-full max-w-[280px] mt-6 bg-slate-50 rounded-xl p-3 border border-slate-200 text-xs space-y-2">
-                <div className="flex justify-between text-slate-600">
-                  <span>Language</span>
-                  <span className="font-semibold text-slate-900">{book.language}</span>
-                </div>
-                <div className="flex justify-between text-slate-600">
-                  <span>Pages</span>
-                  <span className="font-semibold text-slate-900">{book.pages}</span>
-                </div>
-                <div className="flex justify-between text-slate-600">
-                  <span>Publisher</span>
-                  <span className="font-semibold text-slate-900">Samwedna Prakashan</span>
-                </div>
-                <div className="flex justify-between text-slate-600">
-                  <span>Format Available</span>
-                  <span className="font-semibold text-slate-900">Paperback & Digital PDF</span>
-                </div>
-              </div>
-            </div>
-
-            {/* Right: Book Details & The 2 Buy Options */}
-            <div className="md:col-span-7 space-y-6">
-              <div>
-                <div className="flex items-center gap-2 mb-2">
-                  <div className="flex items-center text-amber-500 text-xs">
-                    {[...Array(5)].map((_, i) => (
-                      <Star key={i} className={`w-4 h-4 ${i < Math.floor(book.rating) ? 'fill-current' : 'text-slate-300'}`} />
-                    ))}
-                    <span className="ml-1.5 font-bold text-slate-800">{book.rating}</span>
-                  </div>
-                  <span className="text-xs text-slate-400">({book.reviewsCount.toLocaleString()} verified reviews)</span>
-                </div>
-
-                <h2 className="text-2xl font-bold text-slate-900 font-display leading-tight">
-                  {book.title}
-                </h2>
-                {book.hindiTitle && (
-                  <p className="text-sm text-slate-600 mt-1 font-medium">
-                    {book.hindiTitle}
-                  </p>
-                )}
-                <p className="text-xs text-slate-500 mt-1">Author: <strong className="text-slate-700">{book.author}</strong></p>
-              </div>
-
-              {/* Price Callout */}
-              <div className="p-4 bg-slate-50 rounded-xl border border-slate-200 flex items-center justify-between">
-                <div>
-                  <div className="text-xs text-slate-500 font-medium">Paperback Edition Price</div>
-                  <div className="flex items-baseline gap-2.5 mt-0.5">
-                    <span className="text-2xl font-extrabold text-slate-900 font-display">
-                      ₹{book.paperbackPrice}
-                    </span>
-                    <span className="text-sm text-slate-400 line-through">
-                      ₹{book.originalPrice}
-                    </span>
-                    <span className="text-xs font-semibold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded">
-                      {discountPercent}% OFF
-                    </span>
-                  </div>
-                </div>
-
-                <div className="text-right">
-                  <span className="inline-flex items-center gap-1 text-xs font-medium text-emerald-700">
-                    <ShieldCheck className="w-4 h-4 text-emerald-600" />
-                    In Stock (Ready to Dispatch)
-                  </span>
-                  <div className="text-[11px] text-slate-500">Free delivery on orders ₹499+</div>
-                </div>
-              </div>
-
-              {/* TWO PRIMARY BUY OPTIONS (Critical User Requirement) */}
-              <div className="p-4 bg-indigo-50/50 rounded-xl border border-indigo-100 space-y-3">
-                <p className="text-xs font-semibold text-indigo-900 uppercase tracking-wider">
-                  Select Purchase Option:
-                </p>
-
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  {/* Option 1: Buy Paperback -> takes directly to cart */}
-                  <button
-                    onClick={handleBuyPaperback}
-                    className="flex flex-col items-start justify-center p-3.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl shadow-md transition-all group text-left cursor-pointer"
-                  >
-                    <div className="flex items-center justify-between w-full">
-                      <span className="text-xs font-semibold text-indigo-200 uppercase tracking-wider">Physical Copy</span>
-                      <ShoppingBag className="w-4 h-4 text-indigo-200 group-hover:translate-x-0.5 transition-transform" />
-                    </div>
-                    <div className="text-base font-bold mt-1">Buy Paperback (₹{book.paperbackPrice})</div>
-                    <span className="text-[11px] text-indigo-100 mt-1">Dispatches in 24 hrs · Tracked Courier</span>
-                  </button>
-
-                  {/* Option 2: PDF Download Button -> navigates to subscription pricing page */}
-                  <button
-                    onClick={handlePdfDownload}
-                    className="flex flex-col items-start justify-center p-3.5 bg-white hover:bg-slate-50 text-slate-900 rounded-xl border-2 border-indigo-600 shadow-sm transition-all group text-left cursor-pointer"
-                  >
-                    <div className="flex items-center justify-between w-full">
-                      <span className="text-xs font-semibold text-indigo-600 uppercase tracking-wider">Digital Access</span>
-                      <Download className="w-4 h-4 text-indigo-600 group-hover:translate-y-0.5 transition-transform" />
-                    </div>
-                    <div className="text-base font-bold mt-1 text-indigo-950">PDF Download</div>
-                    <span className="text-[11px] text-slate-600 mt-1">
-                      {user && user.subscription.planId !== 'free' 
-                        ? 'Included with your Active Plan' 
-                        : 'View Subscription Pricing Plans →'}
-                    </span>
-                  </button>
-                </div>
-              </div>
-
-              {/* Tabs for details */}
-              <div>
-                <div className="flex border-b border-slate-200 gap-6 text-xs font-medium">
-                  <button
-                    onClick={() => setActiveTab('overview')}
-                    className={`pb-2.5 transition-colors cursor-pointer ${
-                      activeTab === 'overview'
-                        ? 'border-b-2 border-indigo-600 text-indigo-600 font-semibold'
-                        : 'text-slate-500 hover:text-slate-800'
-                    }`}
-                  >
-                    Overview & Features
-                  </button>
-                  <button
-                    onClick={() => setActiveTab('toc')}
-                    className={`pb-2.5 transition-colors cursor-pointer ${
-                      activeTab === 'toc'
-                        ? 'border-b-2 border-indigo-600 text-indigo-600 font-semibold'
-                        : 'text-slate-500 hover:text-slate-800'
-                    }`}
-                  >
-                    Table of Contents
-                  </button>
-                  <button
-                    onClick={() => setActiveTab('sample')}
-                    className={`pb-2.5 transition-colors cursor-pointer ${
-                      activeTab === 'sample'
-                        ? 'border-b-2 border-indigo-600 text-indigo-600 font-semibold'
-                        : 'text-slate-500 hover:text-slate-800'
-                    }`}
-                  >
-                    Sample Chapter Preview
-                  </button>
-                </div>
-
-                <div className="pt-4 text-xs text-slate-600 leading-relaxed">
-                  {activeTab === 'overview' && (
-                    <div className="space-y-3">
-                      <p>{book.description}</p>
-                      <h4 className="font-semibold text-slate-900 pt-1">Key Highlights:</h4>
-                      <ul className="space-y-1.5 pl-1">
-                        {book.features.map((feat, idx) => (
-                          <li key={idx} className="flex items-start gap-2">
-                            <Check className="w-3.5 h-3.5 text-emerald-600 shrink-0 mt-0.5" />
-                            <span>{feat}</span>
-                          </li>
-                        ))}
-                      </ul>
-                    </div>
-                  )}
-
-                  {activeTab === 'toc' && (
-                    <div className="space-y-2">
-                      <p className="text-slate-500 mb-2 font-medium">Complete syllabus coverage across {book.pages} pages:</p>
-                      <div className="divide-y divide-slate-100 bg-slate-50 rounded-lg p-3">
-                        {book.tableOfContents.map((chap, i) => (
-                          <div key={i} className="py-1.5 flex items-center gap-2">
-                            <span className="font-mono text-slate-400 font-semibold">{(i + 1).toString().padStart(2, '0')}.</span>
-                            <span className="text-slate-800 font-medium">{chap}</span>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-
-                  {activeTab === 'sample' && (
-                    <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 space-y-3">
-                      <div className="flex items-center justify-between">
-                        <span className="font-semibold text-slate-800 flex items-center gap-1.5">
-                          <FileText className="w-4 h-4 text-indigo-600" />
-                          Chapter 1: Foundational Practice Set & Solutions
-                        </span>
-                        <span className="text-[10px] text-slate-500">12 Pages Excerpt</span>
-                      </div>
-                      <p className="text-slate-600 text-[11px] leading-relaxed italic bg-white p-3 rounded-lg border border-slate-200">
-                        &quot;Question 1: In the new 2026 examination scheme, speed calculation in Elementary Arithmetic is expedited using cross-multiplication shortcuts. Example: Compute 48 × 52 in 2 seconds: (50 - 2)(50 + 2) = 2500 - 4 = 2496...&quot;
-                      </p>
-                      <div className="flex justify-end">
-                        <button
-                          onClick={handlePdfDownload}
-                          className="text-xs font-semibold text-indigo-600 hover:text-indigo-800 flex items-center gap-1"
-                        >
-                          <Download className="w-3.5 h-3.5" />
-                          Download Full Sample PDF
-                        </button>
-                      </div>
-                    </div>
-                  )}
-                </div>
-              </div>
-
-            </div>
-
+          <div
+            className="relative max-w-4xl max-h-[82vh] flex items-center justify-center"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <img
+              src={activeSlide.url}
+              alt={activeSlide.label}
+              referrerPolicy="no-referrer"
+              className="max-w-full max-h-[82vh] object-contain rounded-xl shadow-2xl"
+            />
+            {slides.length > 1 && (
+              <>
+                <button
+                  onClick={goPrevSlide}
+                  className="absolute left-2 top-1/2 -translate-y-1/2 p-2.5 rounded-full bg-black/70 hover:bg-black text-white cursor-pointer"
+                >
+                  <ChevronLeft className="w-5 h-5" />
+                </button>
+                <button
+                  onClick={goNextSlide}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 p-2.5 rounded-full bg-black/70 hover:bg-black text-white cursor-pointer"
+                >
+                  <ChevronRight className="w-5 h-5" />
+                </button>
+              </>
+            )}
           </div>
         </div>
-
-      </div>
+      )}
     </div>
   );
 };

@@ -14,8 +14,15 @@ import {
   TestSeriesExam,
   UserTestScore,
   HardCopyOrder,
-  AppLanguage
+  AppLanguage,
+  ReadingPdfSession
 } from '../types';
+import {
+  getBookUnitPrice,
+  getBookDigitalPrice,
+  getDigitalFormatForBook,
+  getBookShareUrl
+} from '../utils/bookHelpers';
 import { 
   BOOKS_DATA, 
   INITIAL_USER, 
@@ -68,6 +75,7 @@ import {
   fetchVideoLecturesFromFirestore,
   subscribeToVideoLectures,
   saveBookToFirestore,
+  deleteBookFromFirestore,
   fetchBooksFromFirestore,
   subscribeToBooks,
   saveExamToFirestore,
@@ -133,8 +141,8 @@ interface AppContextType {
   bookmarkPdf: (id: string) => void;
   studyMaterials: StudyMaterialItem[];
   addStudyMaterial: (item: StudyMaterialItem) => void;
-  readingPdf: { title: string; url: string; pages: number } | null;
-  setReadingPdf: (val: { title: string; url: string; pages: number } | null) => void;
+  readingPdf: ReadingPdfSession | null;
+  setReadingPdf: (val: ReadingPdfSession | null) => void;
 
   // Stubs for course brochure dialogs
   isBrochureOpen: boolean;
@@ -152,7 +160,13 @@ interface AppContextType {
 
   // BooksBoon Catalog & Orders
   booksCatalog: Book[];
-  addBookToCatalog: (book: Book) => void;
+  addBookToCatalog: (book: Book) => Promise<void>;
+  updateBookInCatalog: (book: Book) => Promise<void>;
+  deleteBookFromCatalog: (id: string) => Promise<void>;
+  hasPurchasedBook: (bookId: string) => boolean;
+  openBookPdfReader: (book: Book) => void;
+  buyDigitalBookNow: (book: Book) => void;
+  shareBookLink: (book: Book) => Promise<void>;
   orders: HardCopyOrder[];
   placeOrder: (order: HardCopyOrder) => Promise<HardCopyOrder>;
   updateOrderStatus: (orderId: string, status: HardCopyOrder['shippingStatus'], trackingId?: string) => Promise<void>;
@@ -305,7 +319,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     booksSupabase: Book[];
     examsFirestore: any[];
     examsSupabase: any[];
-    deletedIds: { ca: string[]; pdfs: string[]; exams: string[] };
+    deletedIds: { ca: string[]; pdfs: string[]; exams: string[]; books?: string[] };
   }>({
     caFirestore: [],
     caSupabase: [],
@@ -322,11 +336,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     deletedIds: (() => {
       try {
         const raw = localStorage.getItem('samwedna_deleted_ids');
-        if (raw) return JSON.parse(raw);
+        if (raw) {
+          const parsed = JSON.parse(raw);
+          return { ca: [], pdfs: [], exams: [], books: [], ...parsed };
+        }
       } catch {
         // ignore
       }
-      return { ca: [], pdfs: [], exams: [] };
+      return { ca: [], pdfs: [], exams: [], books: [] };
     })()
   });
 
@@ -472,7 +489,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     });
 
     setBooksCatalog(prev => {
-      const merged = mergeAndSortDatasets(BOOKS_DATA, prev, buf.booksSupabase, buf.booksFirestore, []);
+      const merged = mergeAndSortDatasets(BOOKS_DATA, prev, buf.booksSupabase, buf.booksFirestore, buf.deletedIds.books || []);
       try { localStorage.setItem('samwedna_books', JSON.stringify(merged)); } catch { /* ignore */ }
       return merged;
     });
@@ -511,7 +528,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         remoteBuffersRef.current.deletedIds = {
           ca: Array.from(new Set([...(remoteBuffersRef.current.deletedIds.ca || []), ...(Array.isArray(deletedRemote.ca) ? deletedRemote.ca : [])])),
           pdfs: Array.from(new Set([...(remoteBuffersRef.current.deletedIds.pdfs || []), ...(Array.isArray(deletedRemote.pdfs) ? deletedRemote.pdfs : [])])),
-          exams: Array.from(new Set([...(remoteBuffersRef.current.deletedIds.exams || []), ...(Array.isArray(deletedRemote.exams) ? deletedRemote.exams : [])]))
+          exams: Array.from(new Set([...(remoteBuffersRef.current.deletedIds.exams || []), ...(Array.isArray(deletedRemote.exams) ? deletedRemote.exams : [])])),
+          books: Array.from(new Set([...(remoteBuffersRef.current.deletedIds.books || []), ...(Array.isArray(deletedRemote.books) ? deletedRemote.books : [])]))
         };
         try { localStorage.setItem('samwedna_deleted_ids', JSON.stringify(remoteBuffersRef.current.deletedIds)); } catch { /* ignore */ }
       }
@@ -634,7 +652,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         remoteBuffersRef.current.deletedIds = {
           ca: Array.isArray(data.ca) ? data.ca : [],
           pdfs: Array.isArray(data.pdfs) ? data.pdfs : [],
-          exams: Array.isArray(data.exams) ? data.exams : []
+          exams: Array.isArray(data.exams) ? data.exams : [],
+          books: Array.isArray(data.books) ? data.books : []
         };
         try {
           localStorage.setItem('samwedna_deleted_ids', JSON.stringify(remoteBuffersRef.current.deletedIds));
@@ -883,7 +902,42 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     showToast('Student record updated successfully', 'success');
   };
 
-  const [selectedBook, setSelectedBook] = useState<Book | null>(null);
+  const [selectedBook, setSelectedBookState] = useState<Book | null>(null);
+  const handledDeepLinkBookIdRef = React.useRef<string | null>(null);
+
+  const setSelectedBook = (book: Book | null) => {
+    setSelectedBookState(book);
+    try {
+      const url = new URL(window.location.href);
+      if (book) {
+        url.searchParams.set('book', book.id);
+      } else {
+        url.searchParams.delete('book');
+      }
+      window.history.replaceState({}, '', url.toString());
+    } catch {
+      // ignore history errors in sandboxed iframes
+    }
+  };
+
+  // Handle direct shareable product links (?book=<bookId>) on initial load & when cloud catalog arrives
+  useEffect(() => {
+    try {
+      const params = new URLSearchParams(window.location.search);
+      const bookIdParam = params.get('book');
+      if (!bookIdParam) return;
+      if (handledDeepLinkBookIdRef.current === bookIdParam) return;
+      const matched = booksCatalog.find(b => b.id === bookIdParam);
+      if (matched) {
+        handledDeepLinkBookIdRef.current = bookIdParam;
+        setCurrentViewState('product');
+        setSelectedBookState(matched);
+      }
+    } catch {
+      // ignore
+    }
+  }, [booksCatalog]);
+
   const [examsCategories, setExamsCategories] = useState<ExamCategoryGroup[]>(() => {
     return getStoredExamsData();
   });
@@ -948,7 +1002,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const [activeTestExam, setActiveTestExam] = useState<TestSeriesExam | null>(null);
-  const [readingPdf, setReadingPdf] = useState<{ title: string; url: string; pages: number } | null>(null);
+  const [readingPdf, setReadingPdf] = useState<ReadingPdfSession | null>(null);
   const [activeVideo, setActiveVideo] = useState<VideoLecture | null>(null);
   const [readingEbook, setReadingEbook] = useState<DownloadedBook | null>(null);
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'info' | 'error' } | null>(null);
@@ -1041,9 +1095,114 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const cartCount = cart.reduce((acc, item) => acc + item.quantity, 0);
   const cartSubtotal = cart.reduce((acc, item) => {
-    const price = item.format === 'Paperback' ? item.book.paperbackPrice : (item.format === 'Magazine' ? item.book.paperbackPrice : Math.round(item.book.paperbackPrice * 0.45));
+    const price = getBookUnitPrice(item.book, item.format);
     return acc + (price * item.quantity);
   }, 0);
+
+  const hasPurchasedBook = (bookId: string): boolean => {
+    if (!bookId) return false;
+    if (user?.purchasedBookIds?.includes(bookId)) return true;
+    // Check paid digital orders for current user email (cross-device via Supabase/Firestore orders!)
+    const userEmail = user?.email?.trim().toLowerCase();
+    const checkOrders = [...(orders || []), ...(user?.orders || [])];
+    if (userEmail) {
+      const paidDigital = checkOrders.some(
+        o =>
+          o.studentEmail?.trim().toLowerCase() === userEmail &&
+          o.paymentStatus === 'Paid' &&
+          Array.isArray(o.items) &&
+          o.items.some(
+            it =>
+              it.bookId === bookId &&
+              (it.format === 'E-Book' || it.format === 'Magazine')
+          )
+      );
+      if (paidDigital) return true;
+    }
+    // Also check locally unlocked guest/student purchases in this browser
+    try {
+      const localUnlocked = JSON.parse(localStorage.getItem('booksboon_purchased_ebooks') || '[]');
+      if (Array.isArray(localUnlocked) && localUnlocked.includes(bookId)) return true;
+    } catch {
+      // ignore
+    }
+    return false;
+  };
+
+  const openBookPdfReader = (book: Book) => {
+    const purchased = hasPurchasedBook(book.id);
+    const fullUnlocked = Boolean(isAdmin || purchased);
+    const digitalFormat = getDigitalFormatForBook(book);
+    const digitalPrice = getBookDigitalPrice(book);
+    const pdfSource = book.pdfUrl || book.samplePdfUrl || '/samples/sample.pdf';
+
+    setReadingPdf({
+      title: book.title,
+      author: book.author,
+      url: pdfSource,
+      pages: book.pages || 50,
+      bookId: book.id,
+      book,
+      maxPreviewPages: fullUnlocked ? undefined : (book.previewPagesLimit || 5),
+      isFullUnlocked: fullUnlocked,
+      allowDownload: fullUnlocked,
+      isAdminView: Boolean(isAdmin),
+      format: digitalFormat,
+      price: digitalPrice,
+      fileName: book.pdfFileName || `${book.title}.pdf`
+    });
+  };
+
+  const buyDigitalBookNow = (book: Book) => {
+    const digitalFormat = getDigitalFormatForBook(book);
+    setCart((prev) => {
+      const exists = prev.some(item => item.book.id === book.id && item.format === digitalFormat);
+      if (exists) return prev;
+      return [...prev, { book, format: digitalFormat, quantity: 1 }];
+    });
+    setReadingPdf(null);
+    setSelectedBook(null);
+    setCurrentView('checkout');
+    showToast(`Added "${book.title}" (${digitalFormat} · ₹${getBookDigitalPrice(book)}) for instant digital checkout!`, 'success');
+  };
+
+  const shareBookLink = async (book: Book) => {
+    const shareUrl = getBookShareUrl(book.id);
+    const shareTitle = book.hindiTitle ? `${book.title} (${book.hindiTitle})` : book.title;
+    const shareText = `Check out "${shareTitle}" on BooksBoon.com (Samwedna Publications):`;
+
+    try {
+      if (typeof navigator !== 'undefined' && typeof navigator.share === 'function') {
+        await navigator.share({
+          title: shareTitle,
+          text: shareText,
+          url: shareUrl
+        });
+        showToast('Product link shared!', 'success');
+        return;
+      }
+    } catch (err: any) {
+      if (err?.name === 'AbortError') return;
+    }
+
+    try {
+      await navigator.clipboard.writeText(shareUrl);
+      showToast('Direct product link copied! Paste anywhere to share.', 'success');
+    } catch {
+      // Fallback copy via temporary input
+      try {
+        const input = document.createElement('input');
+        input.value = shareUrl;
+        document.body.appendChild(input);
+        input.select();
+        document.execCommand('copy');
+        document.body.removeChild(input);
+        showToast('Direct product link copied! Paste anywhere to share.', 'success');
+      } catch {
+        showToast(`Share URL: ${shareUrl}`, 'info');
+      }
+    }
+  };
 
   const placeOrder = async (order: HardCopyOrder): Promise<HardCopyOrder> => {
     const created = await OrdersService.createOrder(order);
@@ -1054,16 +1213,80 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
     setOrders(prev => [created, ...prev]);
     clearCart();
-    // Also attach to user orders
+
+    // Unlock any paid E-Book or Magazine PDFs immediately for online reading & offline download
+    const unlockedDigitalItems =
+      created.paymentStatus === 'Paid'
+        ? (created.items || []).filter(it => it.format === 'E-Book' || it.format === 'Magazine')
+        : [];
+    const unlockedIds = unlockedDigitalItems.map(it => it.bookId);
+
+    if (unlockedIds.length > 0) {
+      try {
+        const prevLocal = JSON.parse(localStorage.getItem('booksboon_purchased_ebooks') || '[]');
+        const mergedLocal = Array.from(new Set([...(Array.isArray(prevLocal) ? prevLocal : []), ...unlockedIds]));
+        localStorage.setItem('booksboon_purchased_ebooks', JSON.stringify(mergedLocal));
+      } catch {
+        // ignore
+      }
+    }
+
+    // Also attach to user orders, purchasedBookIds, and E-Library
     if (user) {
       const updatedUserOrders = [created, ...(user.orders || [])];
-      setUser({ ...user, orders: updatedUserOrders });
-      setStudentsList(prev => prev.map(s => s.email.toLowerCase() === user.email.toLowerCase() ? {
-        ...s,
-        orders: [created, ...(s.orders || [])]
-      } : s));
+      const existingPurchased = user.purchasedBookIds || [];
+      const updatedPurchasedIds = Array.from(new Set([...existingPurchased, ...unlockedIds]));
+
+      const newLibraryEntries: DownloadedBook[] = [];
+      unlockedDigitalItems.forEach(item => {
+        const alreadyInLib = (user.library || []).some(l => l.bookId === item.bookId);
+        if (!alreadyInLib) {
+          const catalogBook = booksCatalog.find(b => b.id === item.bookId);
+          newLibraryEntries.push({
+            id: `lib_${Date.now()}_${item.bookId}`,
+            bookId: item.bookId,
+            title: catalogBook?.title || item.title,
+            author: catalogBook?.author || 'Samwedna Editorial Board',
+            downloadedAt: new Date().toISOString().split('T')[0],
+            fileSize: catalogBook?.pdfUrl ? 'Full PDF Ready' : 'Digital Edition',
+            totalPages: catalogBook?.pages || 100,
+            lastReadPage: 1,
+            category: catalogBook?.category || 'E-Book',
+            coverGradient: catalogBook?.coverGradient || 'from-indigo-900 to-slate-900',
+            pdfUrl: catalogBook?.pdfUrl || catalogBook?.samplePdfUrl,
+            pdfFileName: catalogBook?.pdfFileName,
+            format: item.format === 'Magazine' ? 'Magazine' : 'E-Book'
+          });
+        }
+      });
+
+      const updatedUser: UserProfile = {
+        ...user,
+        orders: updatedUserOrders,
+        purchasedBookIds: updatedPurchasedIds,
+        library: [...newLibraryEntries, ...(user.library || [])]
+      };
+      setUser(updatedUser);
+      setStudentsList(prev =>
+        prev.map(s =>
+          s.email.toLowerCase() === user.email.toLowerCase()
+            ? {
+                ...s,
+                orders: [created, ...(s.orders || [])],
+                purchasedBookIds: updatedPurchasedIds,
+                library: [...newLibraryEntries, ...(s.library || [])]
+              }
+            : s
+        )
+      );
+      saveUserProfileToFirestore(updatedUser).catch(console.warn);
     }
-    showToast(`Order #${order.orderId} placed successfully via Razorpay!`, 'success');
+
+    if (unlockedIds.length > 0) {
+      showToast(`Payment verified! Your E-Book/Magazine PDF is unlocked for online reading & offline download.`, 'success');
+    } else {
+      showToast(`Order #${order.orderId} placed successfully!`, 'success');
+    }
     return created;
   };
 
@@ -1326,10 +1549,67 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     ]);
 
     if (sbRes.success || fbRes.ok) {
-      showToast(`Book "${enriched.title}" synced live to BooksBoon store!`, 'success');
+      showToast(`"${enriched.title}" synced live to BooksBoon store!`, 'success');
     } else {
       const reason = isSupabaseConfigured() ? (sbRes.message || fbRes.error) : (fbRes.error || sbRes.message);
       showToast(`Book saved locally only — NOT visible to others yet! ${reason || ''}`, 'error');
+    }
+  };
+
+  const updateBookInCatalog = async (book: Book) => {
+    const enriched: Book = {
+      ...book,
+      createdAt: book.createdAt || Date.now()
+    };
+    const updated = booksCatalog.map(b => (b.id === enriched.id ? enriched : b));
+    setBooksCatalog(updated);
+    if (selectedBook && selectedBook.id === enriched.id) {
+      setSelectedBookState(enriched);
+    }
+    try {
+      localStorage.setItem('samwedna_books', JSON.stringify(updated));
+    } catch (e) { console.error(e); }
+
+    const [fbRes, sbRes] = await Promise.all([
+      saveBookToFirestore(enriched),
+      BooksService.upsert(enriched)
+    ]);
+
+    if (sbRes.success || fbRes.ok) {
+      showToast(`"${enriched.title}" updated & synced live across BooksBoon!`, 'success');
+    } else {
+      const reason = isSupabaseConfigured() ? (sbRes.message || fbRes.error) : (fbRes.error || sbRes.message);
+      showToast(`Updated locally only (${reason || 'Cloud sync unavailable'}).`, 'error');
+    }
+  };
+
+  const deleteBookFromCatalog = async (id: string) => {
+    const updated = booksCatalog.filter(b => b.id !== id);
+    setBooksCatalog(updated);
+    if (selectedBook && selectedBook.id === id) {
+      setSelectedBook(null);
+    }
+    try {
+      localStorage.setItem('samwedna_books', JSON.stringify(updated));
+    } catch (e) { console.error(e); }
+
+    const currentDeletedBooks = remoteBuffersRef.current.deletedIds.books || [];
+    if (!currentDeletedBooks.includes(id)) {
+      remoteBuffersRef.current.deletedIds.books = [...currentDeletedBooks, id];
+      try { localStorage.setItem('samwedna_deleted_ids', JSON.stringify(remoteBuffersRef.current.deletedIds)); } catch { /* ignore */ }
+    }
+
+    const [fbRes, sbRes] = await Promise.all([
+      deleteBookFromFirestore(id),
+      BooksService.delete(id),
+      savePublicSettingToFirestore('deleted_items', remoteBuffersRef.current.deletedIds),
+      AppSettingsService.saveSetting('deleted_items', remoteBuffersRef.current.deletedIds)
+    ]);
+
+    if (sbRes.success || fbRes.ok) {
+      showToast('Publication removed from BooksBoon store', 'info');
+    } else {
+      showToast('Removed locally from catalog', 'info');
     }
   };
 
@@ -1731,6 +2011,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         // BooksBoon
         booksCatalog,
         addBookToCatalog,
+        updateBookInCatalog,
+        deleteBookFromCatalog,
+        hasPurchasedBook,
+        openBookPdfReader,
+        buyDigitalBookNow,
+        shareBookLink,
         orders,
         placeOrder,
         updateOrderStatus,

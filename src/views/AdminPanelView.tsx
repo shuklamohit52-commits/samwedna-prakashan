@@ -40,8 +40,12 @@ import {
   X,
   FileSpreadsheet,
   GraduationCap,
-  Briefcase
+  Briefcase,
+  Share2,
+  Loader2
 } from 'lucide-react';
+import * as pdfjsLib from 'pdfjs-dist';
+import pdfWorkerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
 import { 
   testSupabaseConnection, 
   saveSupabaseConfig, 
@@ -50,11 +54,15 @@ import {
   hasEnvSupabaseConfig,
   setSupabasePublicSharedFlag,
   getSupabaseSchemaSql,
-  syncAllDataToSupabase
+  syncAllDataToSupabase,
+  uploadPdfToSupabaseStorage
 } from '../services/supabase';
 import { signInWithGoogle, savePublicSettingToFirestore } from '../services/firebase';
 import { ExamLogo } from '../components/ExamLogo';
 import { ExamSubItem } from '../data/examsData';
+import { getBookDigitalPrice, getBookGallerySlides, getBookProductType } from '../utils/bookHelpers';
+
+pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorkerUrl;
 import { 
   CurrentAffairArticle, 
   FreePdfResource, 
@@ -101,6 +109,10 @@ export const AdminPanelView: React.FC = () => {
     addTestSeries,
     booksCatalog,
     addBookToCatalog,
+    updateBookInCatalog,
+    deleteBookFromCatalog,
+    openBookPdfReader,
+    shareBookLink,
     examsCategories,
     addOrUpdateExam,
     deleteExamFromState,
@@ -249,20 +261,32 @@ export const AdminPanelView: React.FC = () => {
   const [vidDesc, setVidDesc] = useState('');
   const [vidHindiDesc, setVidHindiDesc] = useState('');
 
-  // 5. BooksBoon Hard Copy Book/Magazine
+  // 5. BooksBoon Hard Copy Book / E-Book / Magazine
+  const [editingBookId, setEditingBookId] = useState<string | null>(null);
+  const [bookProductType, setBookProductType] = useState<'hardcopy' | 'ebook' | 'magazine' | 'both'>('both');
   const [bookTitle, setBookTitle] = useState('');
   const [bookHindiTitle, setBookHindiTitle] = useState('');
   const [bookAuthor, setBookAuthor] = useState('');
   const [bookHindiAuthor, setBookHindiAuthor] = useState('');
   const [bookPrice, setBookPrice] = useState('395');
   const [bookOrigPrice, setBookOrigPrice] = useState('480');
+  const [bookEbookPrice, setBookEbookPrice] = useState('19');
+  const [bookPreviewLimit, setBookPreviewLimit] = useState('5');
   const [bookCategory, setBookCategory] = useState<ExamCategory>('Teaching & UGC NET');
   const [bookCoverUrl, setBookCoverUrl] = useState('');
+  const [bookBackCoverUrl, setBookBackCoverUrl] = useState('');
+  const [bookBackCoverFileName, setBookBackCoverFileName] = useState('');
+  const [bookGalleryImages, setBookGalleryImages] = useState<string[]>([]);
+  const [bookGalleryUrlInput, setBookGalleryUrlInput] = useState('');
+  const [bookPdfUrl, setBookPdfUrl] = useState('');
+  const [bookPdfFileName, setBookPdfFileName] = useState('');
+  const [bookPdfUploading, setBookPdfUploading] = useState(false);
   const [bookPages, setBookPages] = useState('450');
   const [bookStock, setBookStock] = useState('150');
   const [bookDesc, setBookDesc] = useState('Authentic hard copy edition printed with high-grade thermal binding.');
   const [bookHindiDesc, setBookHindiDesc] = useState('प्रामाणिक मुद्रित संस्करण, उच्च गुणवत्ता थर्मल बाइंडिंग और स्पीड पोस्ट डिलीवरी के साथ।');
   const [bookLanguage, setBookLanguage] = useState<'Hindi' | 'English' | 'Bilingual'>('Hindi');
+  const [bookCatalogSearch, setBookCatalogSearch] = useState('');
 
   // Admin authentication bypass or login
   const handleAdminLogin = (e: React.FormEvent) => {
@@ -683,10 +707,185 @@ export const AdminPanelView: React.FC = () => {
     try {
       const optimized = await compressImageDataUrl(file, 900);
       setBookCoverUrl(optimized);
-      showToast(`Book cover "${file.name}" optimized & ready`, 'success');
+      showToast(`Front cover "${file.name}" optimized & ready`, 'success');
     } catch {
       showToast('Failed to load book cover from device', 'error');
     }
+  };
+
+  const handleBookBackCoverFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (!file.type.startsWith('image/')) {
+      showToast('Please select a valid image file for Back Cover', 'error');
+      return;
+    }
+    setBookBackCoverFileName(file.name);
+    try {
+      const optimized = await compressImageDataUrl(file, 900);
+      setBookBackCoverUrl(optimized);
+      showToast(`Back cover "${file.name}" uploaded & optimized!`, 'success');
+    } catch {
+      showToast('Failed to load back cover image', 'error');
+    }
+  };
+
+  const handleBookGalleryFilesChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files || []);
+    if (files.length === 0) return;
+
+    const remainingSlots = 4 - bookGalleryImages.length;
+    if (remainingSlots <= 0) {
+      showToast('Maximum 4 interior book page images allowed. Remove one to add another.', 'info');
+      return;
+    }
+
+    const selectedFiles = files.slice(0, remainingSlots);
+    const newlyOptimized: string[] = [];
+    for (const file of selectedFiles) {
+      if (!file.type.startsWith('image/')) continue;
+      try {
+        const optimized = await compressImageDataUrl(file, 900);
+        newlyOptimized.push(optimized);
+      } catch {
+        // skip broken file
+      }
+    }
+
+    if (newlyOptimized.length > 0) {
+      setBookGalleryImages(prev => [...prev, ...newlyOptimized].slice(0, 4));
+      showToast(`Added ${newlyOptimized.length} interior book page photo(s)!`, 'success');
+    }
+    e.target.value = '';
+  };
+
+  const handleAddBookGalleryUrl = () => {
+    const clean = bookGalleryUrlInput.trim();
+    if (!clean) return;
+    if (bookGalleryImages.length >= 4) {
+      showToast('Maximum 4 additional page images allowed.', 'info');
+      return;
+    }
+    setBookGalleryImages(prev => [...prev, clean]);
+    setBookGalleryUrlInput('');
+    showToast('Interior page image URL added!', 'success');
+  };
+
+  const handleBookPdfFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (file.type !== 'application/pdf' && !file.name.toLowerCase().endsWith('.pdf')) {
+      showToast('Please select a valid PDF (.pdf) document', 'error');
+      return;
+    }
+
+    setBookPdfUploading(true);
+    setBookPdfFileName(file.name);
+
+    try {
+      // Try detecting exact page count via PDF.js
+      try {
+        const arrayBuf = await file.arrayBuffer();
+        const loadingTask = pdfjsLib.getDocument({ data: new Uint8Array(arrayBuf) });
+        const pdfDoc = await loadingTask.promise;
+        if (pdfDoc.numPages > 0) {
+          setBookPages(String(pdfDoc.numPages));
+        }
+        loadingTask.destroy().catch(() => {});
+      } catch {
+        // ignore page count detection errors
+      }
+
+      // Attempt uploading to Supabase Storage 'ebooks' bucket first (ideal for large PDFs)
+      if (isSupabaseConfigured()) {
+        const storageRes = await uploadPdfToSupabaseStorage(file);
+        if (storageRes.url) {
+          setBookPdfUrl(storageRes.url);
+          setBookPdfUploading(false);
+          showToast(`PDF "${file.name}" uploaded to Supabase Storage & ready!`, 'success');
+          return;
+        }
+      }
+
+      // Fallback: embed directly as Base64 Data URL (works immediately with zero storage setup for files <= 5MB)
+      if (file.size > 5 * 1024 * 1024) {
+        setBookPdfUploading(false);
+        showToast(
+          'PDF is larger than 5 MB. Run the updated SQL Schema in the Supabase tab to enable the "ebooks" storage bucket, or paste a direct PDF link below.',
+          'error'
+        );
+        return;
+      }
+
+      const reader = new FileReader();
+      reader.onload = () => {
+        if (typeof reader.result === 'string') {
+          setBookPdfUrl(reader.result);
+          showToast(`PDF "${file.name}" attached! Students will see first ${bookPreviewLimit || 5} pages free; Admin & buyers see all pages.`, 'success');
+        }
+        setBookPdfUploading(false);
+      };
+      reader.onerror = () => {
+        setBookPdfUploading(false);
+        showToast('Failed to read PDF file from device', 'error');
+      };
+      reader.readAsDataURL(file);
+    } catch {
+      setBookPdfUploading(false);
+      showToast('Could not process PDF file', 'error');
+    }
+  };
+
+  const resetBookForm = () => {
+    setEditingBookId(null);
+    setBookProductType('both');
+    setBookTitle('');
+    setBookHindiTitle('');
+    setBookAuthor('');
+    setBookHindiAuthor('');
+    setBookPrice('395');
+    setBookOrigPrice('480');
+    setBookEbookPrice('19');
+    setBookPreviewLimit('5');
+    setBookCoverUrl('');
+    setBookCoverFileName('');
+    setBookBackCoverUrl('');
+    setBookBackCoverFileName('');
+    setBookGalleryImages([]);
+    setBookGalleryUrlInput('');
+    setBookPdfUrl('');
+    setBookPdfFileName('');
+    setBookPages('350');
+    setBookStock('100');
+  };
+
+  const handleLoadBookForEdit = (book: Book) => {
+    setEditingBookId(book.id);
+    setBookProductType(getBookProductType(book));
+    setBookTitle(book.title || '');
+    setBookHindiTitle(book.hindiTitle || '');
+    setBookAuthor(book.author || '');
+    setBookHindiAuthor(book.hindiAuthor || '');
+    setBookPrice(String(book.paperbackPrice || 0));
+    setBookOrigPrice(String(book.originalPrice || book.paperbackPrice || 199));
+    setBookEbookPrice(String(getBookDigitalPrice(book)));
+    setBookPreviewLimit(String(book.previewPagesLimit || 5));
+    setBookCategory(book.category || 'Teaching & UGC NET');
+    setBookCoverUrl(book.bannerImage || '');
+    setBookCoverFileName(book.bannerImage ? 'Loaded from catalog' : '');
+    setBookBackCoverUrl(book.backCoverImage || '');
+    setBookBackCoverFileName(book.backCoverImage ? 'Loaded from catalog' : '');
+    setBookGalleryImages(Array.isArray(book.galleryImages) ? book.galleryImages.slice(0, 4) : []);
+    setBookPdfUrl(book.pdfUrl || '');
+    setBookPdfFileName(book.pdfFileName || (book.pdfUrl ? 'Attached PDF' : ''));
+    setBookPages(String(book.pages || 300));
+    setBookStock(String(book.stockCount ?? 100));
+    setBookDesc(book.description || '');
+    setBookHindiDesc(book.hindiDescription || '');
+    setBookLanguage(book.language || 'Hindi');
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+    showToast(`Editing "${book.title}". Update images, PDF, or price and click Save Changes.`, 'info');
   };
 
   const handleCreatePdf = async (e: React.FormEvent) => {
@@ -760,46 +959,71 @@ export const AdminPanelView: React.FC = () => {
   const handleCreateBook = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!bookTitle.trim()) {
-      showToast('Please enter book title', 'error');
+      showToast('Please enter book / e-book / magazine title', 'error');
       return;
     }
 
-    const newBook: Book = {
-      id: `book-${Date.now()}`,
+    const isHardCopyOnly = bookProductType === 'hardcopy';
+    const isDigitalEnabled = bookProductType === 'ebook' || bookProductType === 'magazine' || bookProductType === 'both' || Boolean(bookPdfUrl.trim());
+    const isMag = bookProductType === 'magazine' || bookCategory === 'Magazines & Periodicals';
+    const parsedEbookPrice = Math.max(1, parseInt(bookEbookPrice, 10) || 19);
+    const parsedHardCopyPrice = bookProductType === 'ebook' || (bookProductType === 'magazine' && (!bookPrice || Number(bookPrice) <= 0))
+      ? parsedEbookPrice
+      : (parseInt(bookPrice, 10) || 395);
+    const parsedOrigPrice = parseInt(bookOrigPrice, 10) || Math.max(parsedHardCopyPrice, parsedEbookPrice);
+    const parsedPreviewLimit = Math.max(1, parseInt(bookPreviewLimit, 10) || 5);
+
+    const existingBook = editingBookId ? booksCatalog.find(b => b.id === editingBookId) : undefined;
+
+    const bookPayload: Book = {
+      id: editingBookId || `book-${Date.now()}`,
       title: bookTitle.trim(),
       hindiTitle: bookHindiTitle.trim() || undefined,
-      category: bookCategory,
-      subject: 'Exam Special',
+      category: isMag ? 'Magazines & Periodicals' : bookCategory,
+      subject: existingBook?.subject || (isMag ? 'Monthly Magazine' : 'Exam Special'),
       author: bookAuthor.trim() || 'Samwedna Editorial Board',
       hindiAuthor: bookHindiAuthor.trim() || undefined,
-      paperbackPrice: parseInt(bookPrice) || 395,
-      originalPrice: parseInt(bookOrigPrice) || 480,
-      ebookAvailable: true,
-      rating: 4.9,
-      reviewsCount: 120,
-      pages: parseInt(bookPages) || 350,
+      paperbackPrice: parsedHardCopyPrice,
+      originalPrice: parsedOrigPrice,
+      ebookAvailable: isDigitalEnabled,
+      ebookPrice: isDigitalEnabled ? parsedEbookPrice : undefined,
+      pdfUrl: bookPdfUrl.trim() || undefined,
+      pdfFileName: bookPdfFileName.trim() || (bookPdfUrl.trim() ? `${bookTitle.trim()}.pdf` : undefined),
+      previewPagesLimit: parsedPreviewLimit,
+      productType: bookProductType,
+      isHardCopyOnly,
+      isMagazine: isMag,
+      rating: existingBook?.rating || 4.9,
+      reviewsCount: existingBook?.reviewsCount || 120,
+      pages: parseInt(bookPages, 10) || 350,
       language: bookLanguage,
-      badge: 'New & Upcoming',
-      description: bookDesc.trim() || 'Authentic hard copy edition printed with high-grade thermal binding.',
+      badge: existingBook?.badge || 'New & Upcoming',
+      description: bookDesc.trim() || 'Authentic Samwedna publication.',
       hindiDescription: bookHindiDesc.trim() || undefined,
-      features: ['Genuine hard copy', 'Fast courier delivery via India Post'],
-      tableOfContents: ['Chapter 1: Foundations', 'Chapter 2: Solved Papers'],
-      samplePdfUrl: '/samples/sample.pdf',
-      coverGradient: 'from-indigo-900 to-slate-900',
-      coverIcon: 'BookOpen',
-      patternYear: '2026 Edition',
-      bannerImage: bookCoverUrl || undefined,
+      features: existingBook?.features || (
+        isDigitalEnabled && bookProductType !== 'hardcopy'
+          ? [`First ${parsedPreviewLimit} pages free preview`, 'Instant online reading & offline PDF download after purchase']
+          : ['Genuine hard copy', 'Fast courier delivery via India Post']
+      ),
+      tableOfContents: existingBook?.tableOfContents || ['Chapter 1: Foundations', 'Chapter 2: Solved Papers'],
+      samplePdfUrl: bookPdfUrl.trim() || existingBook?.samplePdfUrl || '/samples/sample.pdf',
+      coverGradient: existingBook?.coverGradient || 'from-indigo-900 to-slate-900',
+      coverIcon: existingBook?.coverIcon || 'BookOpen',
+      patternYear: existingBook?.patternYear || '2026 Edition',
+      bannerImage: bookCoverUrl.trim() || undefined,
+      backCoverImage: bookBackCoverUrl.trim() || undefined,
+      galleryImages: bookGalleryImages.slice(0, 4),
       inStock: true,
-      stockCount: parseInt(bookStock) || 100
+      stockCount: parseInt(bookStock, 10) || 100,
+      createdAt: existingBook?.createdAt || Date.now()
     };
 
-    await addBookToCatalog(newBook);
-    setBookTitle('');
-    setBookHindiTitle('');
-    setBookAuthor('');
-    setBookHindiAuthor('');
-    setBookCoverUrl('');
-    setBookCoverFileName('');
+    if (editingBookId) {
+      await updateBookInCatalog(bookPayload);
+    } else {
+      await addBookToCatalog(bookPayload);
+    }
+    resetBookForm();
   };
 
   const copySqlSchema = () => {
@@ -3012,180 +3236,648 @@ export const AdminPanelView: React.FC = () => {
         </div>
       )}
 
-      {/* TAB 6: BOOKSBOON CATALOG */}
+      {/* TAB 6: BOOKSBOON CATALOG (Hard Copy Gallery + E-Book/Magazine PDF + Pricing + Share Links) */}
       {activeAdminTab === 'books' && (
-        <div className="bg-white rounded-2xl border border-slate-200 p-6 sm:p-8 space-y-6 shadow-sm">
-          <div className="pb-4 border-b border-slate-100">
-            <h2 className="text-base font-bold text-slate-900">Add Book or Magazine to BooksBoon.com (Bilingual)</h2>
-            <p className="text-xs text-slate-500">Publish physical hard copies and magazines with stock count and CDN cover images in Hindi and English</p>
-          </div>
-
-          <form onSubmit={handleCreateBook} className="space-y-4 text-xs">
-            {/* Title Bilingual */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div className="space-y-1">
-                <label className="block font-semibold text-slate-700">Book / Magazine Title (English) *</label>
-                <input
-                  type="text"
-                  required
-                  value={bookTitle}
-                  onChange={(e) => setBookTitle(e.target.value)}
-                  placeholder="e.g. Nirvachan Loktantra Ka Aadhar"
-                  className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs"
-                />
+        <div className="space-y-6">
+          <div className="bg-white rounded-2xl border border-slate-200 p-6 sm:p-8 space-y-6 shadow-sm">
+            <div className="pb-4 border-b border-slate-100 flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <h2 className="text-base font-bold text-slate-900">
+                  {editingBookId ? 'Edit Publication in BooksBoon.com' : 'Add Hard Copy Book, E-Book or Magazine to BooksBoon.com'}
+                </h2>
+                <p className="text-xs text-slate-500">
+                  Upload Front Cover, Back Cover, up to 4 interior book pages, and full PDFs for E-Books/Magazines (5-page preview for students, full view for Admin &amp; buyers)
+                </p>
               </div>
-
-              <div className="space-y-1">
-                <label className="block font-semibold text-slate-700">हिन्दी पुस्तक शीर्षक / Hindi Book Title</label>
-                <input
-                  type="text"
-                  value={bookHindiTitle}
-                  onChange={(e) => setBookHindiTitle(e.target.value)}
-                  placeholder="उदा. निर्वाचन लोकतंत्र का आधार"
-                  className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs bg-amber-50/20"
-                />
-              </div>
-            </div>
-
-            {/* Author Bilingual & Language */}
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-              <div className="space-y-1">
-                <label className="block font-semibold text-slate-700">Author / Editor (English)</label>
-                <input
-                  type="text"
-                  value={bookAuthor}
-                  onChange={(e) => setBookAuthor(e.target.value)}
-                  placeholder="e.g. Arun Kumar Singh"
-                  className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs"
-                />
-              </div>
-
-              <div className="space-y-1">
-                <label className="block font-semibold text-slate-700">लेखक / संपादक (हिन्दी)</label>
-                <input
-                  type="text"
-                  value={bookHindiAuthor}
-                  onChange={(e) => setBookHindiAuthor(e.target.value)}
-                  placeholder="उदा. अरुण कुमार सिंह"
-                  className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs bg-amber-50/20"
-                />
-              </div>
-
-              <div className="space-y-1">
-                <label className="block font-semibold text-slate-700">Book Medium / भाषा</label>
-                <select
-                  value={bookLanguage}
-                  onChange={(e) => setBookLanguage(e.target.value as 'Hindi' | 'English' | 'Bilingual')}
-                  className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs bg-white font-bold text-indigo-700"
+              {editingBookId && (
+                <button
+                  type="button"
+                  onClick={resetBookForm}
+                  className="px-3 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold cursor-pointer"
                 >
-                  <option value="Hindi">हिन्दी माध्यम / Hindi</option>
-                  <option value="English">English Medium</option>
-                  <option value="Bilingual">द्विभाषी / Bilingual</option>
-                </select>
-              </div>
-            </div>
-
-            {/* Prices & Stock */}
-            <div className="grid grid-cols-3 gap-4">
-              <div>
-                <label className="block font-semibold text-slate-700 mb-1">Hard Copy Price (₹) *</label>
-                <input
-                  type="number"
-                  value={bookPrice}
-                  onChange={(e) => setBookPrice(e.target.value)}
-                  className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs"
-                />
-              </div>
-
-              <div>
-                <label className="block font-semibold text-slate-700 mb-1">Original Price (₹)</label>
-                <input
-                  type="number"
-                  value={bookOrigPrice}
-                  onChange={(e) => setBookOrigPrice(e.target.value)}
-                  className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs"
-                />
-              </div>
-
-              <div>
-                <label className="block font-semibold text-slate-700 mb-1">Physical Stock Count</label>
-                <input
-                  type="number"
-                  value={bookStock}
-                  onChange={(e) => setBookStock(e.target.value)}
-                  className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs"
-                />
-              </div>
-            </div>
-
-            {/* Description Bilingual */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div className="space-y-1">
-                <label className="block font-semibold text-slate-700">Description (English)</label>
-                <textarea
-                  rows={2}
-                  value={bookDesc}
-                  onChange={(e) => setBookDesc(e.target.value)}
-                  className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs"
-                />
-              </div>
-
-              <div className="space-y-1">
-                <label className="block font-semibold text-slate-700">पुस्तक विवरण (हिन्दी / Hindi)</label>
-                <textarea
-                  rows={2}
-                  value={bookHindiDesc}
-                  onChange={(e) => setBookHindiDesc(e.target.value)}
-                  className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs bg-amber-50/20"
-                />
-              </div>
-            </div>
-
-            <div>
-              <label className="block font-semibold text-slate-700 mb-1">Cover Image CDN URL or Upload Below</label>
-              <input
-                type="text"
-                value={bookCoverUrl}
-                onChange={(e) => setBookCoverUrl(e.target.value)}
-                placeholder="https://cdn.jsdelivr.net/gh/luckymohittiwari52-oss/quiz-assets@main/images/... or upload from device"
-                className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs font-mono"
-              />
-            </div>
-
-            {/* Direct Cover Image Upload from Device */}
-            <div className="flex flex-wrap items-center gap-3">
-              <label className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-xl bg-white border border-slate-300 text-slate-700 hover:bg-slate-50 font-bold text-xs cursor-pointer shadow-2xs transition-colors">
-                <Upload className="w-3.5 h-3.5" />
-                <span>Upload Book Cover from Device</span>
-                <input
-                  type="file"
-                  accept="image/*"
-                  onChange={handleBookCoverFileChange}
-                  className="hidden"
-                />
-              </label>
-              {bookCoverFileName && (
-                <span className="text-[11px] text-emerald-700 font-semibold truncate max-w-xs flex items-center gap-1">
-                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
-                  <span>{bookCoverFileName}</span>
-                </span>
+                  Cancel Edit / Add New
+                </button>
               )}
             </div>
 
-            {bookCoverUrl && (
-              <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 flex items-center gap-4">
-                <img src={bookCoverUrl} alt="Preview" className="w-16 h-20 object-cover rounded shadow-xs" />
-                <span className="text-xs text-slate-600">Cover preview looks great!</span>
+            <form onSubmit={handleCreateBook} className="space-y-5 text-xs">
+              {/* Product Format Selector */}
+              <div className="space-y-1.5">
+                <label className="block font-bold text-slate-800">1. Product Type / Format *</label>
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+                  {[
+                    { id: 'hardcopy', label: 'Hard Copy Only', desc: 'Printed book + gallery photos' },
+                    { id: 'ebook', label: 'E-Book (PDF)', desc: '5p preview + ₹9/₹19 PDF' },
+                    { id: 'magazine', label: 'Magazine (PDF)', desc: '5p preview + ₹9/₹19 PDF' },
+                    { id: 'both', label: 'Hard Copy + E-Book', desc: 'Both printed & PDF edition' }
+                  ].map((opt) => (
+                    <button
+                      key={opt.id}
+                      type="button"
+                      onClick={() => {
+                        setBookProductType(opt.id as any);
+                        if (opt.id === 'magazine') setBookCategory('Magazines & Periodicals');
+                      }}
+                      className={`p-3 rounded-xl border text-left transition-all cursor-pointer ${
+                        bookProductType === opt.id
+                          ? 'border-indigo-600 bg-indigo-50 ring-2 ring-indigo-500/20'
+                          : 'border-slate-200 hover:border-slate-300 bg-white'
+                      }`}
+                    >
+                      <span className={`block font-black text-xs ${bookProductType === opt.id ? 'text-indigo-800' : 'text-slate-900'}`}>
+                        {opt.label}
+                      </span>
+                      <span className="text-[10px] text-slate-500">{opt.desc}</span>
+                    </button>
+                  ))}
+                </div>
               </div>
-            )}
 
-            <button
-              type="submit"
-              className="px-6 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold cursor-pointer shadow-xs"
-            >
-              Add to BooksBoon.com
-            </button>
-          </form>
+              {/* Title Bilingual */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="space-y-1">
+                  <label className="block font-semibold text-slate-700">Book / E-Book / Magazine Title (English) *</label>
+                  <input
+                    type="text"
+                    required
+                    value={bookTitle}
+                    onChange={(e) => setBookTitle(e.target.value)}
+                    placeholder="e.g. Monthly Current Affairs Magazine / Nirvachan Loktantra"
+                    className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs"
+                  />
+                </div>
+
+                <div className="space-y-1">
+                  <label className="block font-semibold text-slate-700">हिन्दी पुस्तक शीर्षक / Hindi Title</label>
+                  <input
+                    type="text"
+                    value={bookHindiTitle}
+                    onChange={(e) => setBookHindiTitle(e.target.value)}
+                    placeholder="उदा. निर्वाचन लोकतंत्र का आधार / समवेदना मासिक पत्रिका"
+                    className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs bg-amber-50/20"
+                  />
+                </div>
+              </div>
+
+              {/* Author, Category & Medium */}
+              <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
+                <div className="space-y-1">
+                  <label className="block font-semibold text-slate-700">Author / Editor (English)</label>
+                  <input
+                    type="text"
+                    value={bookAuthor}
+                    onChange={(e) => setBookAuthor(e.target.value)}
+                    placeholder="e.g. Arun Kumar Singh"
+                    className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs"
+                  />
+                </div>
+
+                <div className="space-y-1">
+                  <label className="block font-semibold text-slate-700">लेखक / संपादक (हिन्दी)</label>
+                  <input
+                    type="text"
+                    value={bookHindiAuthor}
+                    onChange={(e) => setBookHindiAuthor(e.target.value)}
+                    placeholder="उदा. अरुण कुमार सिंह"
+                    className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs bg-amber-50/20"
+                  />
+                </div>
+
+                <div className="space-y-1">
+                  <label className="block font-semibold text-slate-700">Exam Category</label>
+                  <select
+                    value={bookCategory}
+                    onChange={(e) => setBookCategory(e.target.value as ExamCategory)}
+                    className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs bg-white font-semibold text-slate-800"
+                  >
+                    <option value="Teaching & UGC NET">Teaching &amp; UGC NET</option>
+                    <option value="All SSC Exam">All SSC Exam</option>
+                    <option value="All Bank Exam">All Bank Exam</option>
+                    <option value="All Railway Exam">All Railway Exam</option>
+                    <option value="All Defence Exam">All Defence Exam</option>
+                    <option value="All State Exam">All State Exam</option>
+                    <option value="UPSC & Civil Services">UPSC &amp; Civil Services</option>
+                    <option value="Magazines & Periodicals">Magazines &amp; Periodicals</option>
+                  </select>
+                </div>
+
+                <div className="space-y-1">
+                  <label className="block font-semibold text-slate-700">Book Medium / भाषा</label>
+                  <select
+                    value={bookLanguage}
+                    onChange={(e) => setBookLanguage(e.target.value as 'Hindi' | 'English' | 'Bilingual')}
+                    className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs bg-white font-bold text-indigo-700"
+                  >
+                    <option value="Hindi">हिन्दी माध्यम / Hindi</option>
+                    <option value="English">English Medium</option>
+                    <option value="Bilingual">द्विभाषी / Bilingual</option>
+                  </select>
+                </div>
+              </div>
+
+              {/* Pricing, Pages & Stock */}
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+                {bookProductType !== 'ebook' && (
+                  <div>
+                    <label className="block font-semibold text-slate-700 mb-1">Hard Copy Price (₹)</label>
+                    <input
+                      type="number"
+                      min={0}
+                      value={bookPrice}
+                      onChange={(e) => setBookPrice(e.target.value)}
+                      className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs font-mono"
+                    />
+                  </div>
+                )}
+
+                <div>
+                  <label className="block font-semibold text-slate-700 mb-1">MRP / Original Price (₹)</label>
+                  <input
+                    type="number"
+                    min={0}
+                    value={bookOrigPrice}
+                    onChange={(e) => setBookOrigPrice(e.target.value)}
+                    className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs font-mono"
+                  />
+                </div>
+
+                <div>
+                  <label className="block font-semibold text-slate-700 mb-1">Total Pages</label>
+                  <input
+                    type="number"
+                    min={1}
+                    value={bookPages}
+                    onChange={(e) => setBookPages(e.target.value)}
+                    className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs font-mono"
+                  />
+                </div>
+
+                {bookProductType !== 'ebook' && (
+                  <div>
+                    <label className="block font-semibold text-slate-700 mb-1">Physical Stock Count</label>
+                    <input
+                      type="number"
+                      min={0}
+                      value={bookStock}
+                      onChange={(e) => setBookStock(e.target.value)}
+                      className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs font-mono"
+                    />
+                  </div>
+                )}
+              </div>
+
+              {/* E-BOOK / MAGAZINE PDF UPLOAD & ADMIN PRICING SECTION */}
+              {bookProductType !== 'hardcopy' && (
+                <div className="p-4 sm:p-5 rounded-2xl bg-indigo-50/70 border border-indigo-200 space-y-4">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <div>
+                      <h3 className="text-xs font-black uppercase tracking-wider text-indigo-900 flex items-center gap-1.5">
+                        <FileText className="w-4 h-4 text-indigo-600" />
+                        <span>E-Book / Magazine PDF &amp; Digital Pricing</span>
+                      </h3>
+                      <p className="text-[11px] text-indigo-700">
+                        Students see only the first {bookPreviewLimit || 5} pages free. Admin sees the complete PDF. Buyers unlock full online reading + offline PDF download.
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div className="space-y-1.5">
+                      <label className="block font-bold text-slate-800">E-Book / Magazine Price (₹) *</label>
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="number"
+                          min={1}
+                          value={bookEbookPrice}
+                          onChange={(e) => setBookEbookPrice(e.target.value)}
+                          placeholder="9 or 19"
+                          className="w-28 px-3 py-2 rounded-xl border border-indigo-300 bg-white text-xs font-black text-indigo-900 font-mono"
+                        />
+                        <div className="flex flex-wrap gap-1">
+                          {['9', '19', '29', '49', '99'].map((preset) => (
+                            <button
+                              key={preset}
+                              type="button"
+                              onClick={() => setBookEbookPrice(preset)}
+                              className={`px-2.5 py-1.5 rounded-lg text-[11px] font-bold cursor-pointer transition-colors ${
+                                bookEbookPrice === preset
+                                  ? 'bg-indigo-600 text-white'
+                                  : 'bg-white border border-indigo-200 text-indigo-700 hover:bg-indigo-100'
+                              }`}
+                            >
+                              ₹{preset}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="space-y-1.5">
+                      <label className="block font-bold text-slate-800">Free Student Preview Limit (Pages)</label>
+                      <input
+                        type="number"
+                        min={1}
+                        max={25}
+                        value={bookPreviewLimit}
+                        onChange={(e) => setBookPreviewLimit(e.target.value)}
+                        className="w-28 px-3 py-2 rounded-xl border border-indigo-300 bg-white text-xs font-bold font-mono"
+                      />
+                      <span className="text-[10px] text-slate-500 block">Default is 5 pages for students (Admin always has full access).</span>
+                    </div>
+                  </div>
+
+                  {/* Upload PDF from Device OR Paste Direct URL */}
+                  <div className="space-y-2">
+                    <label className="block font-bold text-slate-800">Upload Complete PDF File (from Device) or Paste Direct PDF URL</label>
+                    <div className="flex flex-wrap items-center gap-3">
+                      <label className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs cursor-pointer shadow-xs transition-colors">
+                        {bookPdfUploading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}
+                        <span>{bookPdfUploading ? 'Uploading PDF...' : 'Upload Complete PDF from Device'}</span>
+                        <input
+                          type="file"
+                          accept="application/pdf,.pdf"
+                          onChange={handleBookPdfFileChange}
+                          className="hidden"
+                        />
+                      </label>
+
+                      {bookPdfUrl && (
+                        <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-[11px] font-bold">
+                          <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                          <span className="truncate max-w-[220px]">{bookPdfFileName || 'PDF Attached'}</span>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setBookPdfUrl('');
+                              setBookPdfFileName('');
+                            }}
+                            className="text-rose-600 hover:text-rose-800 ml-1 cursor-pointer"
+                            title="Remove PDF"
+                          >
+                            <X className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      )}
+                    </div>
+
+                    <input
+                      type="text"
+                      value={bookPdfUrl.startsWith('data:') ? '' : bookPdfUrl}
+                      onChange={(e) => {
+                        setBookPdfUrl(e.target.value);
+                        if (!bookPdfFileName && e.target.value) setBookPdfFileName('External PDF URL');
+                      }}
+                      placeholder={
+                        bookPdfUrl.startsWith('data:')
+                          ? 'PDF file embedded directly from device (or paste an external https://...pdf URL to replace)'
+                          : 'Or paste direct PDF URL (https://.../magazine.pdf)'
+                      }
+                      className="w-full px-3 py-2 rounded-xl border border-indigo-200 bg-white text-xs font-mono"
+                    />
+                  </div>
+                </div>
+              )}
+
+              {/* HARD COPY & PRODUCT IMAGES GALLERY (Front Cover + Back Cover + 3–4 Additional Book Pages) */}
+              <div className="p-4 sm:p-5 rounded-2xl bg-slate-50 border border-slate-200 space-y-5">
+                <div>
+                  <h3 className="text-xs font-black uppercase tracking-wider text-slate-900 flex items-center gap-1.5">
+                    <ImageIcon className="w-4 h-4 text-amber-600" />
+                    <span>Book Images Gallery (Front Cover, Back Cover &amp; Up to 4 Inside Book Pages)</span>
+                  </h3>
+                  <p className="text-[11px] text-slate-500">
+                    All uploaded photos are automatically compressed for fast loading on mobile and desktop.
+                  </p>
+                </div>
+
+                {/* Front Cover + Back Cover Side by Side */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {/* Front Cover */}
+                  <div className="p-3.5 rounded-xl bg-white border border-slate-200 space-y-2.5">
+                    <label className="block font-bold text-slate-800">Front Cover Page</label>
+                    <input
+                      type="text"
+                      value={bookCoverUrl.startsWith('data:') ? '' : bookCoverUrl}
+                      onChange={(e) => setBookCoverUrl(e.target.value)}
+                      placeholder={bookCoverUrl.startsWith('data:') ? 'Front cover uploaded from device' : 'Paste Front Cover URL or upload below'}
+                      className="w-full px-3 py-1.5 rounded-lg border border-slate-300 text-xs font-mono"
+                    />
+                    <div className="flex items-center gap-2">
+                      <label className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-white font-bold text-[11px] cursor-pointer">
+                        <Upload className="w-3.5 h-3.5" />
+                        <span>Upload Front Cover</span>
+                        <input type="file" accept="image/*" onChange={handleBookCoverFileChange} className="hidden" />
+                      </label>
+                      {bookCoverUrl && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setBookCoverUrl('');
+                            setBookCoverFileName('');
+                          }}
+                          className="text-[11px] text-rose-600 hover:underline font-semibold cursor-pointer"
+                        >
+                          Remove
+                        </button>
+                      )}
+                    </div>
+                    {bookCoverUrl && (
+                      <div className="flex items-center gap-3 pt-1">
+                        <img src={bookCoverUrl} alt="Front cover preview" className="w-16 h-20 object-cover rounded-lg border border-slate-200 shadow-xs" />
+                        <span className="text-[11px] text-emerald-700 font-semibold truncate">{bookCoverFileName || 'Front cover ready'}</span>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Back Cover */}
+                  <div className="p-3.5 rounded-xl bg-white border border-slate-200 space-y-2.5">
+                    <label className="block font-bold text-slate-800">Back Cover Page (Hard Copy)</label>
+                    <input
+                      type="text"
+                      value={bookBackCoverUrl.startsWith('data:') ? '' : bookBackCoverUrl}
+                      onChange={(e) => setBookBackCoverUrl(e.target.value)}
+                      placeholder={bookBackCoverUrl.startsWith('data:') ? 'Back cover uploaded from device' : 'Paste Back Cover URL or upload below'}
+                      className="w-full px-3 py-1.5 rounded-lg border border-slate-300 text-xs font-mono"
+                    />
+                    <div className="flex items-center gap-2">
+                      <label className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-[11px] cursor-pointer">
+                        <Upload className="w-3.5 h-3.5" />
+                        <span>Upload Back Cover</span>
+                        <input type="file" accept="image/*" onChange={handleBookBackCoverFileChange} className="hidden" />
+                      </label>
+                      {bookBackCoverUrl && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setBookBackCoverUrl('');
+                            setBookBackCoverFileName('');
+                          }}
+                          className="text-[11px] text-rose-600 hover:underline font-semibold cursor-pointer"
+                        >
+                          Remove
+                        </button>
+                      )}
+                    </div>
+                    {bookBackCoverUrl && (
+                      <div className="flex items-center gap-3 pt-1">
+                        <img src={bookBackCoverUrl} alt="Back cover preview" className="w-16 h-20 object-cover rounded-lg border border-slate-200 shadow-xs" />
+                        <span className="text-[11px] text-emerald-700 font-semibold truncate">{bookBackCoverFileName || 'Back cover ready'}</span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Additional 3–4 Interior Book Pages Images */}
+                <div className="p-3.5 rounded-xl bg-white border border-slate-200 space-y-3">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <div>
+                      <label className="block font-bold text-slate-800">
+                        Additional Interior Book Page Photos ({bookGalleryImages.length}/4 Uploaded)
+                      </label>
+                      <span className="text-[11px] text-slate-500">
+                        Upload 3–4 photos of index, chapter layouts, or print quality pages so buyers can inspect the book before ordering.
+                      </span>
+                    </div>
+                    <label
+                      className={`inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl font-bold text-[11px] cursor-pointer transition-colors ${
+                        bookGalleryImages.length >= 4
+                          ? 'bg-slate-200 text-slate-500 cursor-not-allowed'
+                          : 'bg-amber-400 hover:bg-amber-300 text-slate-950 shadow-xs'
+                      }`}
+                    >
+                      <Upload className="w-3.5 h-3.5" />
+                      <span>Upload Book Page Photos (Max 4)</span>
+                      <input
+                        type="file"
+                        accept="image/*"
+                        multiple
+                        disabled={bookGalleryImages.length >= 4}
+                        onChange={handleBookGalleryFilesChange}
+                        className="hidden"
+                      />
+                    </label>
+                  </div>
+
+                  {/* Optional URL paste for additional page image */}
+                  {bookGalleryImages.length < 4 && (
+                    <div className="flex gap-2">
+                      <input
+                        type="text"
+                        value={bookGalleryUrlInput}
+                        onChange={(e) => setBookGalleryUrlInput(e.target.value)}
+                        placeholder="Or paste an interior page image URL and click Add..."
+                        className="flex-1 px-3 py-1.5 rounded-lg border border-slate-300 text-xs font-mono"
+                      />
+                      <button
+                        type="button"
+                        onClick={handleAddBookGalleryUrl}
+                        className="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-900 text-white font-bold text-[11px] cursor-pointer"
+                      >
+                        Add URL
+                      </button>
+                    </div>
+                  )}
+
+                  {/* Uploaded Interior Page Thumbnails */}
+                  {bookGalleryImages.length > 0 && (
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-1">
+                      {bookGalleryImages.map((imgUrl, idx) => (
+                        <div key={idx} className="relative rounded-xl overflow-hidden border border-slate-200 bg-slate-50 group">
+                          <img src={imgUrl} alt={`Inside Page ${idx + 1}`} className="w-full h-28 object-cover" />
+                          <div className="px-2 py-1 bg-slate-900/90 text-white text-[10px] font-bold flex items-center justify-between">
+                            <span>Page {idx + 1}</span>
+                            <button
+                              type="button"
+                              onClick={() => setBookGalleryImages(prev => prev.filter((_, i) => i !== idx))}
+                              className="text-rose-300 hover:text-rose-100 cursor-pointer"
+                              title="Remove Page Image"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Description Bilingual */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="space-y-1">
+                  <label className="block font-semibold text-slate-700">Description (English)</label>
+                  <textarea
+                    rows={2}
+                    value={bookDesc}
+                    onChange={(e) => setBookDesc(e.target.value)}
+                    className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs"
+                  />
+                </div>
+
+                <div className="space-y-1">
+                  <label className="block font-semibold text-slate-700">पुस्तक विवरण (हिन्दी / Hindi)</label>
+                  <textarea
+                    rows={2}
+                    value={bookHindiDesc}
+                    onChange={(e) => setBookHindiDesc(e.target.value)}
+                    className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs bg-amber-50/20"
+                  />
+                </div>
+              </div>
+
+              <div className="flex flex-wrap items-center gap-3 pt-2">
+                <button
+                  type="submit"
+                  disabled={bookPdfUploading}
+                  className="px-6 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold cursor-pointer shadow-xs disabled:opacity-60"
+                >
+                  {editingBookId ? 'Save Changes & Sync Live' : 'Publish to BooksBoon.com'}
+                </button>
+                {editingBookId && (
+                  <button
+                    type="button"
+                    onClick={resetBookForm}
+                    className="px-4 py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold cursor-pointer"
+                  >
+                    Cancel Edit
+                  </button>
+                )}
+              </div>
+            </form>
+          </div>
+
+          {/* Existing BooksBoon Catalog Manager (Edit, Admin Full PDF View, Share Link, Delete) */}
+          <div className="bg-white rounded-2xl border border-slate-200 p-6 sm:p-8 space-y-4 shadow-sm">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-100">
+              <div>
+                <h3 className="text-sm font-black text-slate-900">
+                  Manage BooksBoon Store Catalog ({booksCatalog.length} Publications)
+                </h3>
+                <p className="text-xs text-slate-500">
+                  Edit any book to add Back Cover, 3–4 page photos, or E-Book PDF. Admins can preview the complete PDF &amp; copy direct shareable links.
+                </p>
+              </div>
+              <div className="relative w-full sm:w-64">
+                <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-2.5" />
+                <input
+                  type="text"
+                  value={bookCatalogSearch}
+                  onChange={(e) => setBookCatalogSearch(e.target.value)}
+                  placeholder="Filter catalog..."
+                  className="w-full pl-8 pr-3 py-1.5 rounded-xl border border-slate-300 text-xs"
+                />
+              </div>
+            </div>
+
+            <div className="space-y-3 max-h-[540px] overflow-y-auto pr-1">
+              {booksCatalog
+                .filter((b) => {
+                  if (!bookCatalogSearch.trim()) return true;
+                  const q = bookCatalogSearch.toLowerCase();
+                  return (
+                    b.title.toLowerCase().includes(q) ||
+                    (b.hindiTitle || '').toLowerCase().includes(q) ||
+                    b.author.toLowerCase().includes(q)
+                  );
+                })
+                .map((b) => {
+                  const slidesCount = getBookGallerySlides(b).length;
+                  const pType = getBookProductType(b);
+                  const ePrice = getBookDigitalPrice(b);
+                  return (
+                    <div
+                      key={b.id}
+                      className="p-3.5 rounded-2xl border border-slate-200 hover:border-indigo-300 bg-slate-50/60 flex flex-col md:flex-row md:items-center justify-between gap-3 transition-colors"
+                    >
+                      <div className="flex items-center gap-3 min-w-0">
+                        <div className="w-12 h-16 rounded-lg overflow-hidden shrink-0 bg-slate-900 border border-slate-200 flex items-center justify-center text-white text-[10px] font-bold">
+                          {b.bannerImage ? (
+                            <img src={b.bannerImage} alt={b.title} className="w-full h-full object-cover" />
+                          ) : (
+                            'BOOK'
+                          )}
+                        </div>
+                        <div className="min-w-0 space-y-1">
+                          <h4 className="font-bold text-xs text-slate-900 truncate">{b.title}</h4>
+                          <div className="flex flex-wrap items-center gap-1.5 text-[10px]">
+                            <span className="px-2 py-0.5 rounded bg-slate-200 text-slate-800 font-bold uppercase">
+                              {pType}
+                            </span>
+                            {pType !== 'ebook' && (
+                              <span className="px-2 py-0.5 rounded bg-amber-100 text-amber-900 font-bold tabular-nums">
+                                Hard Copy ₹{b.paperbackPrice}
+                              </span>
+                            )}
+                            {(pType !== 'hardcopy' || b.pdfUrl) && (
+                              <span className="px-2 py-0.5 rounded bg-indigo-100 text-indigo-800 font-bold tabular-nums">
+                                Digital ₹{ePrice}
+                              </span>
+                            )}
+                            {b.backCoverImage && (
+                              <span className="px-2 py-0.5 rounded bg-emerald-100 text-emerald-800 font-bold">
+                                Back Cover ✓
+                              </span>
+                            )}
+                            {slidesCount > 1 && (
+                              <span className="px-2 py-0.5 rounded bg-sky-100 text-sky-800 font-bold">
+                                {slidesCount} Photos
+                              </span>
+                            )}
+                            {b.pdfUrl && (
+                              <span className="px-2 py-0.5 rounded bg-purple-100 text-purple-800 font-bold">
+                                Full PDF Attached ✓
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="flex flex-wrap items-center gap-2 shrink-0">
+                        <button
+                          type="button"
+                          onClick={() => handleLoadBookForEdit(b)}
+                          className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-white border border-slate-300 hover:border-indigo-500 text-slate-700 hover:text-indigo-700 text-[11px] font-bold cursor-pointer"
+                        >
+                          <Edit3 className="w-3.5 h-3.5" />
+                          <span>Edit</span>
+                        </button>
+
+                        {(b.pdfUrl || pType !== 'hardcopy') && (
+                          <button
+                            type="button"
+                            onClick={() => openBookPdfReader(b)}
+                            className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-[11px] font-bold cursor-pointer"
+                            title="Read Complete PDF (Admin Full Access)"
+                          >
+                            <Eye className="w-3.5 h-3.5" />
+                            <span>Admin Full PDF</span>
+                          </button>
+                        )}
+
+                        <button
+                          type="button"
+                          onClick={() => shareBookLink(b)}
+                          className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 text-[11px] font-bold cursor-pointer"
+                          title="Copy Direct Product Share Link"
+                        >
+                          <Share2 className="w-3.5 h-3.5" />
+                          <span>Share Link</span>
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => deleteBookFromCatalog(b.id)}
+                          className="p-1.5 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-600 border border-rose-200 cursor-pointer"
+                          title="Remove from Catalog"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
+            </div>
+          </div>
         </div>
       )}
 

@@ -11,13 +11,25 @@ import {
   Eye, 
   Check, 
   Layers,
-  ChevronDown
+  ChevronDown,
+  Share2,
+  Lock,
+  CheckCircle2,
+  Image as ImageIcon,
+  ShieldCheck
 } from 'lucide-react';
 import { BOOKS_DATA } from '../data/mockData';
-import { Book, ExamCategory } from '../types';
+import { Book } from '../types';
 import { BookImage } from '../components/BookImage';
 import { RedTickerBar } from '../components/RedTickerBar';
-import { Flame } from 'lucide-react';
+import {
+  getBookDigitalPrice,
+  getBookGallerySlides,
+  getDigitalFormatForBook,
+  hasDigitalVersion,
+  hasHardCopyVersion,
+  triggerPdfOfflineDownload
+} from '../utils/bookHelpers';
 
 export const ProductView: React.FC = () => {
   const { 
@@ -25,8 +37,11 @@ export const ProductView: React.FC = () => {
     setSelectedBook, 
     addToCart, 
     setCurrentView, 
-    user, 
-    downloadBookToLibrary, 
+    isAdmin,
+    hasPurchasedBook,
+    openBookPdfReader,
+    buyDigitalBookNow,
+    shareBookLink,
     showToast,
     searchQuery,
     setSearchQuery,
@@ -38,7 +53,6 @@ export const ProductView: React.FC = () => {
   const [selectedLanguage, setSelectedLanguage] = useState<string>('All');
   const [priceMax, setPriceMax] = useState<number>(1200);
   const [sortBy, setSortBy] = useState<'popular' | 'price-asc' | 'price-desc' | 'rating'>('popular');
-  const [mobileFilterOpen, setMobileFilterOpen] = useState(false);
 
   const categories: { label: string; value: string }[] = [
     { label: 'All Exams', value: 'All' },
@@ -69,32 +83,45 @@ export const ProductView: React.FC = () => {
       if (selectedFormat === 'Test Series Combo' && !book.isTestSeries) {
         return false;
       }
-      if (selectedFormat === 'Magazine' && !book.title.toLowerCase().includes('magazine')) {
+      if (selectedFormat === 'Paperback' && !hasHardCopyVersion(book)) {
         return false;
       }
-      // Price filter
-      if (book.paperbackPrice > priceMax) {
+      if (selectedFormat === 'E-Book' && !(hasDigitalVersion(book) && !book.isMagazine && book.productType !== 'magazine')) {
+        return false;
+      }
+      if (
+        selectedFormat === 'Magazine' &&
+        !(book.isMagazine || book.productType === 'magazine' || book.category === 'Magazines & Periodicals' || book.title.toLowerCase().includes('magazine'))
+      ) {
+        return false;
+      }
+      // Price filter (use effective min display price so ₹9/₹19 ebooks always match)
+      const effectivePrice = hasHardCopyVersion(book) ? book.paperbackPrice : getBookDigitalPrice(book);
+      if (effectivePrice > priceMax) {
         return false;
       }
       // Search query
       if (searchQuery.trim()) {
         const query = searchQuery.toLowerCase();
         const matchesTitle = book.title.toLowerCase().includes(query);
+        const matchesHindi = (book.hindiTitle || '').toLowerCase().includes(query);
         const matchesAuthor = book.author.toLowerCase().includes(query);
         const matchesCategory = book.category.toLowerCase().includes(query);
         const matchesSubject = book.subject.toLowerCase().includes(query);
-        if (!matchesTitle && !matchesAuthor && !matchesCategory && !matchesSubject) {
+        if (!matchesTitle && !matchesHindi && !matchesAuthor && !matchesCategory && !matchesSubject) {
           return false;
         }
       }
       return true;
     }).sort((a, b) => {
-      if (sortBy === 'price-asc') return a.paperbackPrice - b.paperbackPrice;
-      if (sortBy === 'price-desc') return b.paperbackPrice - a.paperbackPrice;
+      const priceA = hasHardCopyVersion(a) ? a.paperbackPrice : getBookDigitalPrice(a);
+      const priceB = hasHardCopyVersion(b) ? b.paperbackPrice : getBookDigitalPrice(b);
+      if (sortBy === 'price-asc') return priceA - priceB;
+      if (sortBy === 'price-desc') return priceB - priceA;
       if (sortBy === 'rating') return b.rating - a.rating;
       return b.reviewsCount - a.reviewsCount;
     });
-  }, [filterCategory, selectedLanguage, selectedFormat, priceMax, searchQuery, sortBy]);
+  }, [booksCatalog, filterCategory, selectedLanguage, selectedFormat, priceMax, searchQuery, sortBy]);
 
   const handleResetFilters = () => {
     setFilterCategory('All');
@@ -105,17 +132,18 @@ export const ProductView: React.FC = () => {
     setSortBy('popular');
   };
 
-  const handlePdfDownloadClick = (book: Book, e: React.MouseEvent) => {
+  const handleDirectOfflineDownload = async (book: Book, e: React.MouseEvent) => {
     e.stopPropagation();
-    if (!user || user.subscription.planId === 'free' || user.subscription.status !== 'Active') {
-      showToast('PDF downloads require an active subscription. Opening Pricing Plans...', 'info');
-      setCurrentView('signup');
-      window.scrollTo({ top: 0, behavior: 'smooth' });
+    const pdfSource = book.pdfUrl || book.samplePdfUrl;
+    if (!pdfSource || pdfSource === '/samples/sample.pdf') {
+      showToast('PDF file is not attached yet for this publication.', 'info');
+      return;
+    }
+    const res = await triggerPdfOfflineDownload(pdfSource, book.title, book.pdfFileName);
+    if (res.ok) {
+      showToast(`Downloading "${book.title}" PDF for offline reading!`, 'success');
     } else {
-      const res = downloadBookToLibrary(book);
-      if (res.success) {
-        setCurrentView('account');
-      }
+      showToast(res.error || 'Could not download PDF', 'error');
     }
   };
 
@@ -342,7 +370,19 @@ export const ProductView: React.FC = () => {
           {filteredBooks.length > 0 ? (
             <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-6">
               {filteredBooks.map((book) => {
-                const discount = Math.round(((book.originalPrice - book.paperbackPrice) / book.originalPrice) * 100);
+                const supportsHardCopy = hasHardCopyVersion(book);
+                const supportsDigital = hasDigitalVersion(book);
+                const digitalFormat = getDigitalFormatForBook(book);
+                const digitalPrice = getBookDigitalPrice(book);
+                const isPurchased = hasPurchasedBook(book.id);
+                const canAccessFullPdf = Boolean(isAdmin || isPurchased);
+                const galleryCount = getBookGallerySlides(book).length;
+                const previewLimit = book.previewPagesLimit || 5;
+                const primaryPrice = supportsHardCopy ? book.paperbackPrice : digitalPrice;
+                const discount =
+                  book.originalPrice > primaryPrice && primaryPrice > 0
+                    ? Math.round(((book.originalPrice - primaryPrice) / book.originalPrice) * 100)
+                    : 0;
 
                 return (
                   <div
@@ -357,113 +397,285 @@ export const ProductView: React.FC = () => {
                       >
                         <BookImage 
                           book={book} 
-                          className="w-full h-full object-cover group-hover:scale-108 transition-transform duration-500 ease-out"
+                          className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500 ease-out"
                         />
                         <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/20 to-black/30 pointer-events-none" />
-                        <div className="absolute top-3 left-3 right-3 flex justify-between items-start pointer-events-none">
-                          <span className="text-[10px] uppercase font-bold tracking-wider text-cyan-200 bg-black/60 backdrop-blur-xs px-2 py-0.5 rounded">
+                        <div className="absolute top-3 left-3 right-3 flex justify-between items-start gap-2">
+                          <span className="text-[10px] uppercase font-bold tracking-wider text-cyan-200 bg-black/60 backdrop-blur-xs px-2 py-0.5 rounded pointer-events-none">
                             {book.language}
                           </span>
-                          {book.badge && (
-                            <span className="bg-red-600 text-white font-bold text-[10px] px-2 py-0.5 rounded shadow-xs uppercase">
-                              {book.badge}
-                            </span>
-                          )}
+                          <div className="flex items-center gap-1.5">
+                            {book.badge && (
+                              <span className="bg-red-600 text-white font-bold text-[10px] px-2 py-0.5 rounded shadow-xs uppercase pointer-events-none">
+                                {book.badge}
+                              </span>
+                            )}
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                shareBookLink(book);
+                              }}
+                              className="p-1.5 rounded-lg bg-black/65 hover:bg-indigo-600 text-white backdrop-blur-xs transition-colors cursor-pointer"
+                              title="Share Direct Product Link"
+                            >
+                              <Share2 className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
                         </div>
                         <div className="absolute bottom-2 left-3 right-3 flex items-center justify-between text-[11px] text-white pointer-events-none">
-                          <span className="font-semibold text-cyan-300 drop-shadow-xs">{book.pages} Pages</span>
-                          <span className="bg-emerald-600/90 text-white text-[10px] font-bold px-2 py-0.5 rounded backdrop-blur-xs">
-                            ₹{book.paperbackPrice}
+                          <div className="flex items-center gap-1.5">
+                            <span className="font-semibold text-cyan-300 drop-shadow-xs tabular-nums">{book.pages}p</span>
+                            {galleryCount > 1 && (
+                              <span className="inline-flex items-center gap-1 bg-white/15 backdrop-blur-xs px-1.5 py-0.5 rounded text-[10px] font-bold text-amber-200">
+                                <ImageIcon className="w-3 h-3" /> {galleryCount} Photos
+                              </span>
+                            )}
+                          </div>
+                          <span className="bg-emerald-600/90 text-white text-[10px] font-bold px-2 py-0.5 rounded backdrop-blur-xs tabular-nums">
+                            {supportsHardCopy ? `₹${book.paperbackPrice}` : `${digitalFormat} ₹${digitalPrice}`}
                           </span>
                         </div>
                       </div>
                     ) : (
                       <div 
                         onClick={() => setSelectedBook(book)}
-                        className={`p-6 bg-gradient-to-br ${book.coverGradient} text-white cursor-pointer relative overflow-hidden flex flex-col justify-between h-48`}
+                        className={`p-5 bg-gradient-to-br ${book.coverGradient} text-white cursor-pointer relative overflow-hidden flex flex-col justify-between h-52`}
                       >
-                        <div className="flex justify-between items-start">
+                        <div className="flex justify-between items-start gap-2">
                           <span className="text-[10px] uppercase font-bold tracking-wider text-cyan-200 bg-white/10 px-2 py-0.5 rounded">
                             {book.language}
                           </span>
-                          {book.badge && (
-                            <span className="bg-amber-400 text-slate-950 font-bold text-[10px] px-2 py-0.5 rounded shadow-xs uppercase">
-                              {book.badge}
-                            </span>
-                          )}
+                          <div className="flex items-center gap-1.5">
+                            {book.badge && (
+                              <span className="bg-amber-400 text-slate-950 font-bold text-[10px] px-2 py-0.5 rounded shadow-xs uppercase">
+                                {book.badge}
+                              </span>
+                            )}
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                shareBookLink(book);
+                              }}
+                              className="p-1.5 rounded-lg bg-white/15 hover:bg-white/25 text-white transition-colors cursor-pointer"
+                              title="Share Direct Product Link"
+                            >
+                              <Share2 className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
                         </div>
 
                         <div className="my-auto py-1">
-                          <h3 className="text-base font-bold font-display leading-tight group-hover:text-cyan-200 transition-colors">
+                          <h3 className="text-base font-bold font-display leading-tight group-hover:text-cyan-200 transition-colors line-clamp-2">
                             {book.title}
                           </h3>
                           <p className="text-[10px] text-slate-300 mt-1 line-clamp-1">{book.patternYear}</p>
                         </div>
 
                         <div className="pt-2 border-t border-white/20 flex items-center justify-between text-[11px] text-slate-200">
-                          <span>{book.pages} Pages</span>
+                          <span className="tabular-nums">{book.pages} Pages</span>
                           <span className="font-semibold text-cyan-300">
-                            {book.isTestSeries ? `${book.testsCount} Tests Included` : 'Full Guide'}
+                            {book.pdfUrl ? `${digitalFormat} PDF Ready` : (book.isTestSeries ? `${book.testsCount} Tests` : 'Full Guide')}
                           </span>
                         </div>
                       </div>
                     )}
 
                     {/* Card Content & Action Bar */}
-                    <div className="p-5 flex flex-col flex-1 justify-between space-y-4">
+                    <div className="p-5 flex flex-col flex-1 justify-between space-y-3.5">
                       <div>
-                        <div className="flex items-center gap-1.5 text-xs text-amber-500 mb-1">
-                          <Star className="w-3.5 h-3.5 fill-current" />
-                          <span className="font-bold text-slate-800">{book.rating}</span>
-                          <span className="text-[11px] text-slate-400">({book.reviewsCount})</span>
+                        <div className="flex items-center justify-between gap-2 mb-1">
+                          <div className="flex items-center gap-1.5 text-xs text-amber-500">
+                            <Star className="w-3.5 h-3.5 fill-current" />
+                            <span className="font-bold text-slate-800 tabular-nums">{book.rating}</span>
+                            <span className="text-[11px] text-slate-400">({book.reviewsCount})</span>
+                          </div>
+                          {isPurchased ? (
+                            <span className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded">
+                              <CheckCircle2 className="w-3 h-3" /> Owned PDF
+                            </span>
+                          ) : isAdmin && supportsDigital ? (
+                            <span className="inline-flex items-center gap-1 text-[10px] font-bold text-amber-800 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded">
+                              <ShieldCheck className="w-3 h-3" /> Admin Full
+                            </span>
+                          ) : null}
                         </div>
 
                         <h4 
                           onClick={() => setSelectedBook(book)}
-                          className="text-xs font-bold text-slate-900 font-display line-clamp-1 hover:text-indigo-600 cursor-pointer"
+                          className="text-xs font-bold text-slate-900 font-display line-clamp-2 hover:text-indigo-600 cursor-pointer leading-snug"
                         >
                           {book.title}
                         </h4>
-                        <p className="text-[10px] text-slate-500 mt-0.5">Author: {book.author}</p>
+                        <p className="text-[10px] text-slate-500 mt-0.5 truncate">Author: {book.author}</p>
                         <p className="text-[11px] text-slate-600 line-clamp-2 mt-1.5">
                           {book.description}
                         </p>
                       </div>
 
-                      {/* Price Section */}
-                      <div className="pt-2 border-t border-slate-100 flex items-baseline justify-between">
-                        <div>
-                          <span className="text-lg font-bold text-slate-900 font-display">
-                            ₹{book.paperbackPrice}
-                          </span>
-                          <span className="text-xs text-slate-400 line-through ml-1.5">
-                            ₹{book.originalPrice}
-                          </span>
+                      {/* Price Section (Hard Copy + Digital E-Book/Magazine Price) */}
+                      <div className="pt-2 border-t border-slate-100 space-y-1.5">
+                        <div className="flex items-baseline justify-between">
+                          <div>
+                            <span className="text-lg font-black text-slate-900 font-display tabular-nums">
+                              ₹{primaryPrice}
+                            </span>
+                            {book.originalPrice > primaryPrice && (
+                              <span className="text-xs text-slate-400 line-through ml-1.5 tabular-nums">
+                                ₹{book.originalPrice}
+                              </span>
+                            )}
+                          </div>
+                          {discount > 0 ? (
+                            <span className="text-[11px] font-semibold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded tabular-nums">
+                              {discount}% OFF
+                            </span>
+                          ) : (
+                            <span className="text-[10px] font-bold text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded">
+                              {supportsHardCopy ? 'Hard Copy' : `${digitalFormat} PDF`}
+                            </span>
+                          )}
                         </div>
-                        <span className="text-[11px] font-semibold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded">
-                          {discount}% OFF
-                        </span>
+
+                        {supportsHardCopy && supportsDigital && (
+                          <div className="flex items-center justify-between text-[11px] text-indigo-700 bg-indigo-50/70 px-2.5 py-1 rounded-lg">
+                            <span className="font-semibold">{digitalFormat} PDF Edition</span>
+                            <span className="font-black tabular-nums">₹{digitalPrice}</span>
+                          </div>
+                        )}
                       </div>
 
-                      {/* 2 Primary Buy Buttons: Buy Paperback (takes to cart) & PDF Download (navigates to subscription) */}
-                      <div className="grid grid-cols-2 gap-2 pt-1">
-                        <button
-                          onClick={(e) => handleBuyPaperbackClick(book, e)}
-                          className="py-2.5 px-2 text-center text-xs font-bold rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white transition-colors shadow-xs flex items-center justify-center gap-1.5 cursor-pointer"
-                          title="Buy Paperback & Proceed to Cart"
-                        >
-                          <ShoppingBag className="w-3.5 h-3.5" />
-                          <span>Buy Paperback</span>
-                        </button>
+                      {/* Action Buttons */}
+                      <div className="space-y-2 pt-1">
+                        {supportsHardCopy ? (
+                          <div className="grid grid-cols-2 gap-2">
+                            <button
+                              onClick={(e) => handleBuyPaperbackClick(book, e)}
+                              className="py-2.5 px-2 text-center text-xs font-bold rounded-xl bg-slate-900 hover:bg-slate-800 text-white transition-colors shadow-xs flex items-center justify-center gap-1.5 cursor-pointer"
+                              title="Buy Hard Copy & Proceed to Cart"
+                            >
+                              <ShoppingBag className="w-3.5 h-3.5" />
+                              <span>Hard Copy</span>
+                            </button>
 
-                        <button
-                          onClick={(e) => handlePdfDownloadClick(book, e)}
-                          className="py-2.5 px-2 text-center text-xs font-semibold rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-800 transition-colors flex items-center justify-center gap-1.5 cursor-pointer"
-                          title="Download PDF or View Subscription"
-                        >
-                          <Download className="w-3.5 h-3.5 text-indigo-600" />
-                          <span>PDF Download</span>
-                        </button>
+                            {supportsDigital ? (
+                              canAccessFullPdf ? (
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    openBookPdfReader(book);
+                                  }}
+                                  className="py-2.5 px-2 text-center text-xs font-bold rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white transition-colors flex items-center justify-center gap-1.5 cursor-pointer"
+                                >
+                                  <BookOpen className="w-3.5 h-3.5" />
+                                  <span>{isAdmin ? 'Full PDF' : 'Read PDF'}</span>
+                                </button>
+                              ) : (
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    buyDigitalBookNow(book);
+                                  }}
+                                  className="py-2.5 px-2 text-center text-xs font-bold rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white transition-colors flex items-center justify-center gap-1 cursor-pointer tabular-nums"
+                                >
+                                  <span>PDF ₹{digitalPrice}</span>
+                                </button>
+                              )
+                            ) : (
+                              <button
+                                onClick={() => setSelectedBook(book)}
+                                className="py-2.5 px-2 text-center text-xs font-semibold rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-800 transition-colors flex items-center justify-center gap-1.5 cursor-pointer"
+                              >
+                                <Eye className="w-3.5 h-3.5 text-indigo-600" />
+                                <span>Inspect Pages</span>
+                              </button>
+                            )}
+                          </div>
+                        ) : (
+                          /* Digital-Only E-Book or Magazine Card Actions */
+                          <div className="grid grid-cols-2 gap-2">
+                            {canAccessFullPdf ? (
+                              <>
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    openBookPdfReader(book);
+                                  }}
+                                  className="py-2.5 px-2 text-center text-xs font-bold rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white transition-colors flex items-center justify-center gap-1.5 cursor-pointer"
+                                >
+                                  <BookOpen className="w-3.5 h-3.5" />
+                                  <span>Read Full</span>
+                                </button>
+                                <button
+                                  onClick={(e) => handleDirectOfflineDownload(book, e)}
+                                  className="py-2.5 px-2 text-center text-xs font-bold rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white transition-colors flex items-center justify-center gap-1.5 cursor-pointer"
+                                >
+                                  <Download className="w-3.5 h-3.5" />
+                                  <span>Offline PDF</span>
+                                </button>
+                              </>
+                            ) : (
+                              <>
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    openBookPdfReader(book);
+                                  }}
+                                  className="py-2.5 px-2 text-center text-xs font-bold rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-800 transition-colors flex items-center justify-center gap-1 cursor-pointer"
+                                >
+                                  <Lock className="w-3 h-3 text-amber-600" />
+                                  <span>{previewLimit}p Preview</span>
+                                </button>
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    buyDigitalBookNow(book);
+                                  }}
+                                  className="py-2.5 px-2 text-center text-xs font-black rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white transition-colors flex items-center justify-center gap-1 cursor-pointer tabular-nums"
+                                >
+                                  <ShoppingBag className="w-3.5 h-3.5" />
+                                  <span>Buy ₹{digitalPrice}</span>
+                                </button>
+                              </>
+                            )}
+                          </div>
+                        )}
+
+                        {/* Secondary quick strip: 5-Page Preview / Details + Share Link */}
+                        <div className="flex items-center justify-between pt-1 text-[11px]">
+                          {supportsDigital && !canAccessFullPdf && supportsHardCopy ? (
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                openBookPdfReader(book);
+                              }}
+                              className="text-indigo-600 hover:text-indigo-800 font-bold inline-flex items-center gap-1 cursor-pointer"
+                            >
+                              <Eye className="w-3.5 h-3.5" />
+                              <span>Preview {previewLimit} Pages Free</span>
+                            </button>
+                          ) : (
+                            <button
+                              onClick={() => setSelectedBook(book)}
+                              className="text-slate-600 hover:text-indigo-600 font-semibold inline-flex items-center gap-1 cursor-pointer"
+                            >
+                              <Eye className="w-3.5 h-3.5" />
+                              <span>View Details &amp; Photos</span>
+                            </button>
+                          )}
+
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              shareBookLink(book);
+                            }}
+                            className="text-slate-500 hover:text-indigo-600 font-semibold inline-flex items-center gap-1 cursor-pointer"
+                          >
+                            <Share2 className="w-3 h-3" />
+                            <span>Share</span>
+                          </button>
+                        </div>
                       </div>
                     </div>
 

@@ -17,11 +17,15 @@ import {
   Copy,
   Check,
   PackageCheck,
-  Printer
+  Printer,
+  BookOpen,
+  Download,
+  Mail
 } from 'lucide-react';
 import { BookImage } from '../components/BookImage';
 import { HardCopyOrder } from '../types';
 import confetti from 'canvas-confetti';
+import { getBookUnitPrice, isDigitalOnlyCart, triggerPdfOfflineDownload } from '../utils/bookHelpers';
 
 export const CheckoutView: React.FC = () => {
   const { 
@@ -29,14 +33,20 @@ export const CheckoutView: React.FC = () => {
     cartSubtotal, 
     cartCount, 
     user, 
+    booksCatalog,
     placeOrder, 
+    openBookPdfReader,
     setCurrentView,
+    setAccountTab,
     setPortalMode,
     showToast 
   } = useApp();
 
+  const digitalOnly = isDigitalOnlyCart(cart);
+
   // Address state initialized with user info
   const [fullName, setFullName] = useState(user?.name || '');
+  const [email, setEmail] = useState(user?.email || '');
   const [phone, setPhone] = useState(user?.phone || '');
   const [street, setStreet] = useState(user?.address?.street || '');
   const [city, setCity] = useState(user?.address?.city || '');
@@ -45,24 +55,14 @@ export const CheckoutView: React.FC = () => {
   const [landmark, setLandmark] = useState(user?.address?.landmark || '');
   const [deliverySpeed, setDeliverySpeed] = useState<'standard' | 'express'>('standard');
 
-  // Razorpay Gateway Modal State
-  const [showRazorpayModal, setShowRazorpayModal] = useState(false);
-  const [activePaymentMethod, setActivePaymentMethod] = useState<'upi' | 'card' | 'netbanking' | 'cod'>('upi');
-  const [upiId, setUpiId] = useState('');
-  const [cardNumber, setCardNumber] = useState('');
-  const [cardExpiry, setCardExpiry] = useState('');
-  const [cardCvv, setCardCvv] = useState('');
-  const [cardName, setCardName] = useState('');
-  const [selectedBank, setSelectedBank] = useState('SBI');
   const [isProcessingPayment, setIsProcessingPayment] = useState(false);
-  const [paymentStep, setPaymentStep] = useState<'idle' | 'processing' | 'success'>('idle');
 
   // Confirmed Order
   const [confirmedOrder, setConfirmedOrder] = useState<HardCopyOrder | null>(null);
 
   // Financial calculations
-  const shippingFee = cartSubtotal >= 499 ? 0 : 50;
-  const expressFee = deliverySpeed === 'express' ? 40 : 0;
+  const shippingFee = digitalOnly || cartSubtotal >= 499 ? 0 : 50;
+  const expressFee = !digitalOnly && deliverySpeed === 'express' ? 40 : 0;
   const totalAmount = cartSubtotal + shippingFee + expressFee;
 
   if (cart.length === 0 && !confirmedOrder) {
@@ -92,13 +92,23 @@ export const CheckoutView: React.FC = () => {
   // Real Razorpay Standard Web Checkout flow
   const handleProceedToRazorpay = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!fullName.trim() || !phone.trim() || !street.trim() || !city.trim() || !pinCode.trim()) {
-      showToast('Please fill in complete delivery address details', 'error');
+    if (!fullName.trim() || !phone.trim()) {
+      showToast('Please enter your Full Name and Phone Number', 'error');
       return;
     }
-    if (pinCode.length < 6) {
-      showToast('Please enter a valid 6-digit Indian PIN code', 'error');
+    if (digitalOnly && !email.trim()) {
+      showToast('Please enter your Email Address to unlock your E-Book/Magazine PDF', 'error');
       return;
+    }
+    if (!digitalOnly) {
+      if (!street.trim() || !city.trim() || !pinCode.trim()) {
+        showToast('Please fill in complete delivery address details', 'error');
+        return;
+      }
+      if (pinCode.length < 6) {
+        showToast('Please enter a valid 6-digit Indian PIN code', 'error');
+        return;
+      }
     }
 
     if (typeof (window as any).Razorpay === 'undefined') {
@@ -197,27 +207,37 @@ export const CheckoutView: React.FC = () => {
                 console.warn('Confetti error:', err);
               }
 
-              const trackingNumber = `IP-EXP-2026-${Math.floor(1000 + Math.random() * 9000)}IN`;
+              const trackingNumber = digitalOnly
+                ? `DIGITAL-INSTANT-${Math.floor(1000 + Math.random() * 9000)}`
+                : `IP-EXP-2026-${Math.floor(1000 + Math.random() * 9000)}IN`;
               const newOrder: HardCopyOrder = {
                 orderId: response.razorpay_order_id || `BB-ORD-${Math.floor(100000 + Math.random() * 900000)}`,
                 trackingId: trackingNumber,
                 createdAt: new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }),
-                studentEmail: user?.email || 'shukla.mohit52@gmail.com',
+                studentEmail: email.trim() || user?.email || 'guest@booksboon.com',
                 studentName: fullName,
                 phone,
-                address: {
-                  street,
-                  city,
-                  state,
-                  pinCode,
-                  landmark
-                },
+                address: digitalOnly
+                  ? {
+                      street: 'Instant Digital PDF Delivery',
+                      city: 'Online Library',
+                      state: 'India',
+                      pinCode: '000000',
+                      landmark: 'BooksBoon E-Library'
+                    }
+                  : {
+                      street,
+                      city,
+                      state,
+                      pinCode,
+                      landmark
+                    },
                 items: cart.map(item => ({
                   bookId: item.book.id,
                   title: item.book.title,
                   format: item.format,
                   quantity: item.quantity,
-                  price: item.format === 'Paperback' ? item.book.paperbackPrice : (item.format === 'Magazine' ? item.book.paperbackPrice : Math.round(item.book.paperbackPrice * 0.45)),
+                  price: getBookUnitPrice(item.book, item.format),
                   coverImage: item.book.bannerImage
                 })),
                 subtotal: cartSubtotal,
@@ -226,9 +246,9 @@ export const CheckoutView: React.FC = () => {
                 paymentMethod: 'Razorpay',
                 paymentId: response.razorpay_payment_id,
                 paymentStatus: 'Paid',
-                shippingStatus: 'Processing',
-                courierPartner: deliverySpeed === 'express' ? 'Bluedart Express Courier' : 'India Post Speed Post',
-                estimatedDelivery: new Date(Date.now() + 4 * 86400000).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })
+                shippingStatus: digitalOnly ? 'Delivered' : 'Processing',
+                courierPartner: digitalOnly ? 'BooksBoon Instant Digital Delivery' : (deliverySpeed === 'express' ? 'Bluedart Express Courier' : 'India Post Speed Post'),
+                estimatedDelivery: digitalOnly ? 'Unlocked Immediately' : new Date(Date.now() + 4 * 86400000).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })
               };
 
               await placeOrder(newOrder);
@@ -293,7 +313,7 @@ export const CheckoutView: React.FC = () => {
         title: item.book.title,
         format: item.format,
         quantity: item.quantity,
-        price: item.format === 'Paperback' ? item.book.paperbackPrice : (item.format === 'Magazine' ? item.book.paperbackPrice : Math.round(item.book.paperbackPrice * 0.45)),
+        price: getBookUnitPrice(item.book, item.format),
         coverImage: item.book.bannerImage
       })),
       subtotal: cartSubtotal,
@@ -374,28 +394,70 @@ export const CheckoutView: React.FC = () => {
               </div>
             </div>
 
-            {/* Items summary */}
+            {/* Items summary (with Instant Read Online + Offline Download for Paid E-Books/Magazines) */}
             <div className="space-y-3 pt-4 border-t border-slate-100">
-              <h3 className="text-xs font-bold text-slate-700 uppercase tracking-wider">Ordered Hard Copies</h3>
+              <h3 className="text-xs font-bold text-slate-700 uppercase tracking-wider">Ordered Publications</h3>
               <div className="space-y-3">
-                {confirmedOrder.items.map((it, idx) => (
-                  <div key={idx} className="flex items-center justify-between p-3 rounded-xl bg-slate-50 border border-slate-200 text-xs">
-                    <div className="flex items-center gap-3">
-                      <div className="w-10 h-14 rounded overflow-hidden shrink-0 bg-slate-200">
-                        {it.coverImage ? (
-                          <img src={it.coverImage} alt={it.title} className="w-full h-full object-cover" />
-                        ) : (
-                          <div className="w-full h-full flex items-center justify-center text-[9px] text-slate-400">Book</div>
-                        )}
+                {confirmedOrder.items.map((it, idx) => {
+                  const catalogBook = booksCatalog.find(b => b.id === it.bookId);
+                  const isDigitalUnlocked =
+                    confirmedOrder.paymentStatus === 'Paid' &&
+                    (it.format === 'E-Book' || it.format === 'Magazine');
+                  return (
+                    <div key={idx} className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3.5 rounded-xl bg-slate-50 border border-slate-200 text-xs">
+                      <div className="flex items-center gap-3 min-w-0">
+                        <div className="w-10 h-14 rounded overflow-hidden shrink-0 bg-slate-200">
+                          {it.coverImage ? (
+                            <img src={it.coverImage} alt={it.title} className="w-full h-full object-cover" />
+                          ) : (
+                            <div className="w-full h-full flex items-center justify-center text-[9px] text-slate-400">Book</div>
+                          )}
+                        </div>
+                        <div className="min-w-0">
+                          <h4 className="font-bold text-slate-900 line-clamp-1">{it.title}</h4>
+                          <span className="text-slate-500 text-[11px]">Format: {it.format} • Qty: {it.quantity}</span>
+                          {isDigitalUnlocked && (
+                            <span className="block text-[11px] font-bold text-emerald-700 mt-0.5">
+                              Full PDF Unlocked · Read Online &amp; Download Offline
+                            </span>
+                          )}
+                        </div>
                       </div>
-                      <div>
-                        <h4 className="font-bold text-slate-900 line-clamp-1">{it.title}</h4>
-                        <span className="text-slate-500 text-[11px]">Format: {it.format} • Qty: {it.quantity}</span>
+
+                      <div className="flex items-center gap-2 shrink-0 flex-wrap">
+                        {isDigitalUnlocked && catalogBook && (
+                          <>
+                            <button
+                              type="button"
+                              onClick={() => openBookPdfReader(catalogBook)}
+                              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-[11px] cursor-pointer"
+                            >
+                              <BookOpen className="w-3.5 h-3.5" />
+                              <span>Read Online</span>
+                            </button>
+                            <button
+                              type="button"
+                              onClick={async () => {
+                                const res = await triggerPdfOfflineDownload(
+                                  catalogBook.pdfUrl || catalogBook.samplePdfUrl,
+                                  catalogBook.title,
+                                  catalogBook.pdfFileName
+                                );
+                                if (res.ok) showToast('Downloading full PDF offline!', 'success');
+                                else showToast(res.error || 'PDF not attached yet', 'info');
+                              }}
+                              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-[11px] cursor-pointer"
+                            >
+                              <Download className="w-3.5 h-3.5" />
+                              <span>Download PDF</span>
+                            </button>
+                          </>
+                        )}
+                        <span className="font-bold text-slate-900 tabular-nums ml-1">₹{it.price * it.quantity}</span>
                       </div>
                     </div>
-                    <span className="font-bold text-slate-900">₹{it.price * it.quantity}</span>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             </div>
 
@@ -473,8 +535,14 @@ export const CheckoutView: React.FC = () => {
                 1
               </div>
               <div>
-                <h2 className="text-base font-bold text-slate-900">Hard Copy Delivery Address</h2>
-                <p className="text-xs text-slate-500">Provide complete postal address for swift courier dispatch via India Post</p>
+                <h2 className="text-base font-bold text-slate-900">
+                  {digitalOnly ? 'Instant Digital E-Book / Magazine Access Details' : 'Hard Copy Delivery Address'}
+                </h2>
+                <p className="text-xs text-slate-500">
+                  {digitalOnly
+                    ? 'No shipping address needed — your full PDF unlocks immediately for online reading & offline download after Razorpay payment.'
+                    : 'Provide complete postal address for swift courier dispatch via India Post'}
+                </p>
               </div>
             </div>
 
@@ -499,7 +567,7 @@ export const CheckoutView: React.FC = () => {
 
                 <div>
                   <label className="block text-xs font-semibold text-slate-700 mb-1">
-                    Phone / WhatsApp Number (For Courier OTP) *
+                    Phone / WhatsApp Number *
                   </label>
                   <div className="relative">
                     <Phone className="w-4 h-4 text-slate-400 absolute left-3 top-3" />
@@ -515,134 +583,156 @@ export const CheckoutView: React.FC = () => {
                 </div>
               </div>
 
+              {/* Email input (critical for linking digital PDFs to student account) */}
               <div>
                 <label className="block text-xs font-semibold text-slate-700 mb-1">
-                  Full Street Address (House No, Ward, Street, Area) *
+                  Email Address {digitalOnly ? '(Required for Permanent PDF Unlock & Receipt) *' : '(For Order Receipt)'}
                 </label>
                 <div className="relative">
-                  <MapPin className="w-4 h-4 text-slate-400 absolute left-3 top-3" />
-                  <textarea
-                    required
-                    rows={2}
-                    value={street}
-                    onChange={(e) => setStreet(e.target.value)}
-                    placeholder="Ward No 24, Near Nehru Park, Chawani"
-                    className="w-full pl-9 pr-3 py-2 rounded-xl border border-slate-300 text-xs focus:ring-2 focus:ring-indigo-500 focus:outline-hidden"
+                  <Mail className="w-4 h-4 text-slate-400 absolute left-3 top-3" />
+                  <input
+                    type="email"
+                    required={digitalOnly}
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    placeholder="student@gmail.com"
+                    className="w-full pl-9 pr-3 py-2.5 rounded-xl border border-slate-300 text-xs focus:ring-2 focus:ring-indigo-500 focus:outline-hidden"
                   />
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
-                <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1">
-                    PIN Code (6 Digits) *
-                  </label>
-                  <input
-                    type="text"
-                    required
-                    maxLength={6}
-                    value={pinCode}
-                    onChange={(e) => setPinCode(e.target.value.replace(/\D/g, ''))}
-                    placeholder="332713"
-                    className="w-full px-3 py-2.5 rounded-xl border border-slate-300 text-xs font-mono focus:ring-2 focus:ring-indigo-500 focus:outline-hidden"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1">
-                    City / District *
-                  </label>
-                  <input
-                    type="text"
-                    required
-                    value={city}
-                    onChange={(e) => setCity(e.target.value)}
-                    placeholder="Neem Ka Thana"
-                    className="w-full px-3 py-2.5 rounded-xl border border-slate-300 text-xs focus:ring-2 focus:ring-indigo-500 focus:outline-hidden"
-                  />
-                </div>
-
-                <div className="col-span-2 sm:col-span-1">
-                  <label className="block text-xs font-semibold text-slate-700 mb-1">
-                    State *
-                  </label>
-                  <input
-                    type="text"
-                    required
-                    value={state}
-                    onChange={(e) => setState(e.target.value)}
-                    placeholder="Rajasthan"
-                    className="w-full px-3 py-2.5 rounded-xl border border-slate-300 text-xs focus:ring-2 focus:ring-indigo-500 focus:outline-hidden"
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">
-                  Nearby Landmark (Optional)
-                </label>
-                <input
-                  type="text"
-                  value={landmark}
-                  onChange={(e) => setLandmark(e.target.value)}
-                  placeholder="e.g. Opposite State Bank Branch"
-                  className="w-full px-3 py-2.5 rounded-xl border border-slate-300 text-xs focus:ring-2 focus:ring-indigo-500 focus:outline-hidden"
-                />
-              </div>
-
-              {/* Delivery Speed selection */}
-              <div className="pt-2">
-                <label className="block text-xs font-semibold text-slate-700 mb-2">
-                  Shipping Partner & Speed
-                </label>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <button
-                    type="button"
-                    onClick={() => setDeliverySpeed('standard')}
-                    className={`p-3 rounded-xl border text-left flex items-start justify-between cursor-pointer ${
-                      deliverySpeed === 'standard'
-                        ? 'border-indigo-600 bg-indigo-50/60 ring-2 ring-indigo-500/20'
-                        : 'border-slate-200 hover:border-slate-300'
-                    }`}
-                  >
-                    <div>
-                      <div className="font-bold text-xs text-slate-900 flex items-center gap-1.5">
-                        <Truck className="w-3.5 h-3.5 text-indigo-600" />
-                        <span>India Post Speed Post</span>
-                      </div>
-                      <span className="text-[11px] text-slate-500 block mt-0.5">3-5 Business Days Delivery</span>
+              {!digitalOnly && (
+                <>
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-700 mb-1">
+                      Full Street Address (House No, Ward, Street, Area) *
+                    </label>
+                    <div className="relative">
+                      <MapPin className="w-4 h-4 text-slate-400 absolute left-3 top-3" />
+                      <textarea
+                        required
+                        rows={2}
+                        value={street}
+                        onChange={(e) => setStreet(e.target.value)}
+                        placeholder="Ward No 24, Near Nehru Park, Chawani"
+                        className="w-full pl-9 pr-3 py-2 rounded-xl border border-slate-300 text-xs focus:ring-2 focus:ring-indigo-500 focus:outline-hidden"
+                      />
                     </div>
-                    <span className="text-xs font-bold text-emerald-700">
-                      {shippingFee === 0 ? 'FREE' : `₹${shippingFee}`}
-                    </span>
-                  </button>
+                  </div>
 
-                  <button
-                    type="button"
-                    onClick={() => setDeliverySpeed('express')}
-                    className={`p-3 rounded-xl border text-left flex items-start justify-between cursor-pointer ${
-                      deliverySpeed === 'express'
-                        ? 'border-indigo-600 bg-indigo-50/60 ring-2 ring-indigo-500/20'
-                        : 'border-slate-200 hover:border-slate-300'
-                    }`}
-                  >
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
                     <div>
-                      <div className="font-bold text-xs text-slate-900 flex items-center gap-1.5">
-                        <Truck className="w-3.5 h-3.5 text-amber-600" />
-                        <span>Bluedart Air Express</span>
-                      </div>
-                      <span className="text-[11px] text-slate-500 block mt-0.5">1-2 Days Priority Dispatch</span>
+                      <label className="block text-xs font-semibold text-slate-700 mb-1">
+                        PIN Code (6 Digits) *
+                      </label>
+                      <input
+                        type="text"
+                        required
+                        maxLength={6}
+                        value={pinCode}
+                        onChange={(e) => setPinCode(e.target.value.replace(/\D/g, ''))}
+                        placeholder="332713"
+                        className="w-full px-3 py-2.5 rounded-xl border border-slate-300 text-xs font-mono focus:ring-2 focus:ring-indigo-500 focus:outline-hidden"
+                      />
                     </div>
-                    <span className="text-xs font-bold text-slate-900">+₹40</span>
-                  </button>
-                </div>
-              </div>
+
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-700 mb-1">
+                        City / District *
+                      </label>
+                      <input
+                        type="text"
+                        required
+                        value={city}
+                        onChange={(e) => setCity(e.target.value)}
+                        placeholder="Neem Ka Thana"
+                        className="w-full px-3 py-2.5 rounded-xl border border-slate-300 text-xs focus:ring-2 focus:ring-indigo-500 focus:outline-hidden"
+                      />
+                    </div>
+
+                    <div className="col-span-2 sm:col-span-1">
+                      <label className="block text-xs font-semibold text-slate-700 mb-1">
+                        State *
+                      </label>
+                      <input
+                        type="text"
+                        required
+                        value={state}
+                        onChange={(e) => setState(e.target.value)}
+                        placeholder="Rajasthan"
+                        className="w-full px-3 py-2.5 rounded-xl border border-slate-300 text-xs focus:ring-2 focus:ring-indigo-500 focus:outline-hidden"
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-700 mb-1">
+                      Nearby Landmark (Optional)
+                    </label>
+                    <input
+                      type="text"
+                      value={landmark}
+                      onChange={(e) => setLandmark(e.target.value)}
+                      placeholder="e.g. Opposite State Bank Branch"
+                      className="w-full px-3 py-2.5 rounded-xl border border-slate-300 text-xs focus:ring-2 focus:ring-indigo-500 focus:outline-hidden"
+                    />
+                  </div>
+
+                  {/* Delivery Speed selection */}
+                  <div className="pt-2">
+                    <label className="block text-xs font-semibold text-slate-700 mb-2">
+                      Shipping Partner &amp; Speed
+                    </label>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <button
+                        type="button"
+                        onClick={() => setDeliverySpeed('standard')}
+                        className={`p-3 rounded-xl border text-left flex items-start justify-between cursor-pointer ${
+                          deliverySpeed === 'standard'
+                            ? 'border-indigo-600 bg-indigo-50/60 ring-2 ring-indigo-500/20'
+                            : 'border-slate-200 hover:border-slate-300'
+                        }`}
+                      >
+                        <div>
+                          <div className="font-bold text-xs text-slate-900 flex items-center gap-1.5">
+                            <Truck className="w-3.5 h-3.5 text-indigo-600" />
+                            <span>India Post Speed Post</span>
+                          </div>
+                          <span className="text-[11px] text-slate-500 block mt-0.5">3-5 Business Days Delivery</span>
+                        </div>
+                        <span className="text-xs font-bold text-emerald-700">
+                          {shippingFee === 0 ? 'FREE' : `₹${shippingFee}`}
+                        </span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => setDeliverySpeed('express')}
+                        className={`p-3 rounded-xl border text-left flex items-start justify-between cursor-pointer ${
+                          deliverySpeed === 'express'
+                            ? 'border-indigo-600 bg-indigo-50/60 ring-2 ring-indigo-500/20'
+                            : 'border-slate-200 hover:border-slate-300'
+                        }`}
+                      >
+                        <div>
+                          <div className="font-bold text-xs text-slate-900 flex items-center gap-1.5">
+                            <Truck className="w-3.5 h-3.5 text-amber-600" />
+                            <span>Bluedart Air Express</span>
+                          </div>
+                          <span className="text-[11px] text-slate-500 block mt-0.5">1-2 Days Priority Dispatch</span>
+                        </div>
+                        <span className="text-xs font-bold text-slate-900">+₹40</span>
+                      </button>
+                    </div>
+                  </div>
+                </>
+              )}
 
               <div className="pt-4 space-y-3">
                 <button
                   type="submit"
                   disabled={isProcessingPayment}
-                  className="w-full py-3.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-sm shadow-md hover:shadow-lg transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
+                  className="w-full py-3.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-sm shadow-md hover:shadow-lg transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50 tabular-nums"
                 >
                   {isProcessingPayment ? (
                     <>
@@ -652,25 +742,31 @@ export const CheckoutView: React.FC = () => {
                   ) : (
                     <>
                       <Lock className="w-4 h-4" />
-                      <span>Pay ₹{totalAmount} with Razorpay (Cards, UPI, NetBanking)</span>
+                      <span>
+                        {digitalOnly
+                          ? `Pay ₹${totalAmount} & Unlock Full PDF Immediately`
+                          : `Pay ₹${totalAmount} with Razorpay (Cards, UPI, NetBanking)`}
+                      </span>
                     </>
                   )}
                 </button>
 
-                <div className="flex items-center justify-between p-3 bg-slate-50 border border-slate-200 rounded-xl text-xs">
-                  <div>
-                    <span className="font-semibold text-slate-800 block">Prefer Cash on Delivery?</span>
-                    <span className="text-[11px] text-slate-500">Pay cash upon delivery to courier executive</span>
+                {!digitalOnly && (
+                  <div className="flex items-center justify-between p-3 bg-slate-50 border border-slate-200 rounded-xl text-xs">
+                    <div>
+                      <span className="font-semibold text-slate-800 block">Prefer Cash on Delivery?</span>
+                      <span className="text-[11px] text-slate-500">Pay cash upon delivery to courier executive</span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={handlePlaceCodOrder}
+                      disabled={isProcessingPayment}
+                      className="px-3 py-1.5 rounded-lg border border-slate-300 text-xs font-bold text-slate-700 hover:bg-slate-100 cursor-pointer disabled:opacity-50"
+                    >
+                      Place COD Order
+                    </button>
                   </div>
-                  <button
-                    type="button"
-                    onClick={handlePlaceCodOrder}
-                    disabled={isProcessingPayment}
-                    className="px-3 py-1.5 rounded-lg border border-slate-300 text-xs font-bold text-slate-700 hover:bg-slate-100 cursor-pointer disabled:opacity-50"
-                  >
-                    Place COD Order
-                  </button>
-                </div>
+                )}
               </div>
             </form>
           </div>
@@ -703,8 +799,8 @@ export const CheckoutView: React.FC = () => {
                   <div className="flex-1 min-w-0">
                     <h4 className="text-xs font-bold text-slate-900 truncate">{item.book.title}</h4>
                     <p className="text-[11px] text-slate-500">{item.format} • Qty: {item.quantity}</p>
-                    <span className="text-xs font-bold text-indigo-700">
-                      ₹{(item.format === 'Paperback' ? item.book.paperbackPrice : (item.format === 'Magazine' ? item.book.paperbackPrice : Math.round(item.book.paperbackPrice * 0.45))) * item.quantity}
+                    <span className="text-xs font-bold text-indigo-700 tabular-nums">
+                      ₹{getBookUnitPrice(item.book, item.format) * item.quantity}
                     </span>
                   </div>
                 </div>
@@ -714,16 +810,16 @@ export const CheckoutView: React.FC = () => {
             {/* Calculations */}
             <div className="space-y-2 pt-4 border-t border-slate-100 text-xs">
               <div className="flex justify-between text-slate-600">
-                <span>Hard Copies Subtotal</span>
-                <span className="font-semibold text-slate-900">₹{cartSubtotal}</span>
+                <span>{digitalOnly ? 'Digital Publications Subtotal' : 'Publications Subtotal'}</span>
+                <span className="font-semibold text-slate-900 tabular-nums">₹{cartSubtotal}</span>
               </div>
               <div className="flex justify-between text-slate-600">
-                <span>Shipping & Packaging</span>
+                <span>{digitalOnly ? 'Digital Delivery' : 'Shipping & Packaging'}</span>
                 <span className="font-semibold text-emerald-700">
-                  {shippingFee === 0 ? 'FREE (Orders > ₹499)' : `₹${shippingFee}`}
+                  {digitalOnly ? 'INSTANT (₹0)' : (shippingFee === 0 ? 'FREE (Orders > ₹499)' : `₹${shippingFee}`)}
                 </span>
               </div>
-              {deliverySpeed === 'express' && (
+              {!digitalOnly && deliverySpeed === 'express' && (
                 <div className="flex justify-between text-slate-600">
                   <span>Bluedart Air Express Surcharge</span>
                   <span className="font-semibold text-slate-900">₹40</span>

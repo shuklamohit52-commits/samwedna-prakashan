@@ -27,13 +27,15 @@ import {
   Shield,
   Train,
   Crosshair,
-  Calendar
+  Calendar,
+  Share2
 } from 'lucide-react';
 import { BOOKS_DATA } from '../data/mockData';
 import { EXAMS_CATEGORIES_DATA } from '../data/examsData';
 import { BookImage } from '../components/BookImage';
 import { ExamLogo } from '../components/ExamLogo';
 import { TopicLogo } from '../components/TopicLogo';
+import { getBookDigitalPrice, hasHardCopyVersion } from '../utils/bookHelpers';
 
 export const HomeView: React.FC = () => {
   const { 
@@ -51,7 +53,10 @@ export const HomeView: React.FC = () => {
     selectExamById,
     appLanguage,
     examsCategories,
-    booksCatalog
+    booksCatalog,
+    shareBookLink,
+    buyDigitalBookNow,
+    openBookPdfReader
   } = useApp();
 
   const [currentSlide, setCurrentSlide] = useState(0);
@@ -548,68 +553,111 @@ export const HomeView: React.FC = () => {
 
         {/* Books Grid with HD Gradient Borders */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-          {(booksCatalog && booksCatalog.length > 0 ? booksCatalog : BOOKS_DATA).slice(0, 4).map((book) => (
-            <div 
-              key={book.id}
-              className="p-[1.5px] rounded-3xl bg-gradient-to-br from-amber-400/40 via-orange-500/20 to-indigo-500/30 hover:from-amber-400 hover:via-orange-500 hover:to-indigo-600 shadow-sm hover:shadow-2xl hover:shadow-amber-500/20 transition-all duration-300 flex flex-col justify-between group"
-            >
-              <div className="bg-white p-4 rounded-[22.5px] h-full flex flex-col justify-between">
-                <div>
-                  <div 
-                    onClick={() => setSelectedBook(book)}
-                    className="relative aspect-3/4 w-full bg-slate-100 rounded-2xl overflow-hidden border border-slate-200/80 cursor-pointer shadow-xs"
-                  >
-                    <BookImage book={book} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
-                    <span className="absolute top-2.5 left-2.5 px-2.5 py-0.5 rounded-md bg-slate-950/85 backdrop-blur-xs text-[10px] font-black text-amber-300 shadow-xs border border-amber-400/30">
-                      {book.badge || 'Official Book'}
-                    </span>
-                  </div>
-
-                  <div className="pt-3.5 space-y-1.5">
-                    <span className="text-[10px] font-black text-amber-700 uppercase tracking-wider block truncate">
-                      {book.category}
-                    </span>
-                    <h4 
+          {(booksCatalog && booksCatalog.length > 0 ? booksCatalog : BOOKS_DATA).slice(0, 4).map((book) => {
+            const supportsHardCopy = hasHardCopyVersion(book);
+            const displayPrice = supportsHardCopy ? book.paperbackPrice : getBookDigitalPrice(book);
+            const discountPct =
+              book.originalPrice > displayPrice && displayPrice > 0
+                ? Math.round(((book.originalPrice - displayPrice) / book.originalPrice) * 100)
+                : 0;
+            return (
+              <div 
+                key={book.id}
+                className="p-[1.5px] rounded-3xl bg-gradient-to-br from-amber-400/40 via-orange-500/20 to-indigo-500/30 hover:from-amber-400 hover:via-orange-500 hover:to-indigo-600 shadow-sm hover:shadow-2xl hover:shadow-amber-500/20 transition-all duration-300 flex flex-col justify-between group"
+              >
+                <div className="bg-white p-4 rounded-[22.5px] h-full flex flex-col justify-between">
+                  <div>
+                    <div 
                       onClick={() => setSelectedBook(book)}
-                      className="font-extrabold text-sm text-slate-900 line-clamp-2 hover:text-indigo-600 transition-colors cursor-pointer"
+                      className="relative aspect-3/4 w-full bg-slate-100 rounded-2xl overflow-hidden border border-slate-200/80 cursor-pointer shadow-xs"
                     >
-                      {isHindi && book.hindiTitle ? book.hindiTitle : book.title}
-                    </h4>
-                    <p className="text-xs text-slate-500 truncate">{book.author}</p>
-
-                    <div className="flex items-center justify-between pt-2">
-                      <div>
-                        <span className="text-base font-black text-slate-900">₹{book.paperbackPrice}</span>
-                        <span className="text-xs text-slate-400 line-through ml-1.5 font-normal">₹{book.originalPrice}</span>
-                      </div>
-                      <span className="text-[11px] font-bold text-emerald-600 bg-emerald-50 border border-emerald-200/60 px-1.5 py-0.5 rounded-md">
-                        {Math.round(((book.originalPrice - book.paperbackPrice) / book.originalPrice) * 100)}% off
+                      <BookImage book={book} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
+                      <span className="absolute top-2.5 left-2.5 px-2.5 py-0.5 rounded-md bg-slate-950/85 backdrop-blur-xs text-[10px] font-black text-amber-300 shadow-xs border border-amber-400/30">
+                        {book.badge || (supportsHardCopy ? 'Official Book' : 'Digital PDF')}
                       </span>
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          shareBookLink(book);
+                        }}
+                        className="absolute top-2.5 right-2.5 p-1.5 rounded-lg bg-slate-950/75 hover:bg-indigo-600 text-white backdrop-blur-xs transition-colors cursor-pointer"
+                        title="Share Product Link"
+                      >
+                        <Share2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+
+                    <div className="pt-3.5 space-y-1.5">
+                      <span className="text-[10px] font-black text-amber-700 uppercase tracking-wider block truncate">
+                        {book.category}
+                      </span>
+                      <h4 
+                        onClick={() => setSelectedBook(book)}
+                        className="font-extrabold text-sm text-slate-900 line-clamp-2 hover:text-indigo-600 transition-colors cursor-pointer"
+                      >
+                        {isHindi && book.hindiTitle ? book.hindiTitle : book.title}
+                      </h4>
+                      <p className="text-xs text-slate-500 truncate">{book.author}</p>
+
+                      <div className="flex items-center justify-between pt-2">
+                        <div>
+                          <span className="text-base font-black text-slate-900 tabular-nums">₹{displayPrice}</span>
+                          {book.originalPrice > displayPrice && (
+                            <span className="text-xs text-slate-400 line-through ml-1.5 font-normal tabular-nums">₹{book.originalPrice}</span>
+                          )}
+                        </div>
+                        {discountPct > 0 && (
+                          <span className="text-[11px] font-bold text-emerald-600 bg-emerald-50 border border-emerald-200/60 px-1.5 py-0.5 rounded-md tabular-nums">
+                            {discountPct}% off
+                          </span>
+                        )}
+                      </div>
                     </div>
                   </div>
-                </div>
 
-                <div className="pt-4 mt-2 border-t border-slate-100 flex items-center gap-2">
-                  <button
-                    onClick={() => addToCart(book, 'Paperback')}
-                    className="flex-1 py-2 px-3 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-bold transition-colors flex items-center justify-center gap-1.5 cursor-pointer"
-                  >
-                    <ShoppingBag className="w-3.5 h-3.5" />
-                    <span>Add to Cart</span>
-                  </button>
-                  <button
-                    onClick={() => {
-                      addToCart(book, 'Paperback');
-                      setCurrentView('checkout');
-                    }}
-                    className="py-2 px-3 bg-amber-400 hover:bg-amber-300 text-slate-950 rounded-xl text-xs font-black transition-colors cursor-pointer shadow-xs"
-                  >
-                    Buy Now
-                  </button>
+                  <div className="pt-4 mt-2 border-t border-slate-100 flex items-center gap-2">
+                    {supportsHardCopy ? (
+                      <>
+                        <button
+                          onClick={() => addToCart(book, 'Paperback')}
+                          className="flex-1 py-2 px-3 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-bold transition-colors flex items-center justify-center gap-1.5 cursor-pointer"
+                        >
+                          <ShoppingBag className="w-3.5 h-3.5" />
+                          <span>Add to Cart</span>
+                        </button>
+                        <button
+                          onClick={() => {
+                            addToCart(book, 'Paperback');
+                            setCurrentView('checkout');
+                          }}
+                          className="py-2 px-3 bg-amber-400 hover:bg-amber-300 text-slate-950 rounded-xl text-xs font-black transition-colors cursor-pointer shadow-xs"
+                        >
+                          Buy Now
+                        </button>
+                      </>
+                    ) : (
+                      <>
+                        <button
+                          onClick={() => openBookPdfReader(book)}
+                          className="flex-1 py-2 px-3 bg-slate-100 hover:bg-slate-200 text-slate-800 rounded-xl text-xs font-bold transition-colors flex items-center justify-center gap-1.5 cursor-pointer"
+                        >
+                          <BookOpen className="w-3.5 h-3.5 text-indigo-600" />
+                          <span>5p Preview</span>
+                        </button>
+                        <button
+                          onClick={() => buyDigitalBookNow(book)}
+                          className="py-2 px-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-black transition-colors cursor-pointer shadow-xs tabular-nums"
+                        >
+                          Buy ₹{displayPrice}
+                        </button>
+                      </>
+                    )}
+                  </div>
                 </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       </section>
 

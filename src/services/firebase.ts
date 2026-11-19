@@ -651,8 +651,13 @@ export const subscribeToVideoLectures = (callback: (videos: VideoLecture[]) => v
 export const saveBookToFirestore = async (book: Book): Promise<FirestoreWriteResult> => {
   try {
     const ref = doc(db, 'books', book.id);
+    // Firestore has a 1 MiB per-document limit. Keep full URLs, omit oversized base64 PDF blobs (Supabase stores full PDFs).
+    const safeBook: Record<string, any> = { ...book };
+    if (typeof safeBook.pdfUrl === 'string' && safeBook.pdfUrl.startsWith('data:') && safeBook.pdfUrl.length > 450000) {
+      delete safeBook.pdfUrl;
+    }
     const payload = sanitizeForFirestore({
-      ...book,
+      ...safeBook,
       createdAt: book.createdAt ?? (extractTimestampMs(book) || Date.now()),
       updatedAt: Date.now()
     });
@@ -661,6 +666,17 @@ export const saveBookToFirestore = async (book: Book): Promise<FirestoreWriteRes
   } catch (error) {
     const formatted = formatFirestoreWriteError(error);
     console.warn('Firestore books write error:', formatted);
+    return formatted;
+  }
+};
+
+export const deleteBookFromFirestore = async (id: string): Promise<FirestoreWriteResult> => {
+  try {
+    await deleteDoc(doc(db, 'books', id));
+    return { ok: true };
+  } catch (error) {
+    const formatted = formatFirestoreWriteError(error);
+    console.warn('Firestore books delete error:', formatted);
     return formatted;
   }
 };

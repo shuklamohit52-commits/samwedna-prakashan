@@ -23,6 +23,7 @@ import {
   ArrowRight
 } from 'lucide-react';
 import { BookImage } from '../components/BookImage';
+import { triggerPdfOfflineDownload } from '../utils/bookHelpers';
 
 export const StudentDashboardView: React.FC = () => {
   const { 
@@ -37,7 +38,11 @@ export const StudentDashboardView: React.FC = () => {
     currentAffairs,
     freePdfs,
     orders,
-    setReadingPdf
+    booksCatalog,
+    hasPurchasedBook,
+    openBookPdfReader,
+    setReadingPdf,
+    showToast
   } = useApp();
 
   const [editMode, setEditMode] = useState(false);
@@ -481,91 +486,174 @@ export const StudentDashboardView: React.FC = () => {
       )}
 
       {/* TAB 3: My E-Library & Free PDFs */}
-      {accountTab === 'library' && (
-        <div className="space-y-6">
-          <div className="flex items-center justify-between">
-            <div>
-              <h2 className="text-base font-bold text-slate-900">Downloaded Books & Free PDF Capsules</h2>
-              <p className="text-xs text-slate-500">Read in-browser or download to study offline</p>
+      {accountTab === 'library' && (() => {
+        const purchasedCatalogBooks = booksCatalog.filter(b => hasPurchasedBook(b.id));
+        const purchasedIds = new Set(purchasedCatalogBooks.map(b => b.id));
+        const extraLibraryItems = (user.library || []).filter(item => !purchasedIds.has(item.bookId));
+
+        return (
+          <div className="space-y-6">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div>
+                <h2 className="text-base font-bold text-slate-900">My Purchased E-Books, Magazines &amp; Free PDFs</h2>
+                <p className="text-xs text-slate-500">Read complete unlocked PDFs online inside BooksBoon or download offline to your device</p>
+              </div>
+              <button
+                onClick={() => {
+                  setPortalMode('booksboon');
+                  setCurrentView('product');
+                }}
+                className="text-xs font-bold text-indigo-600 hover:text-indigo-800 cursor-pointer"
+              >
+                Explore Store &amp; E-Books →
+              </button>
             </div>
-            <button
-              onClick={() => {
-                setPortalMode('institute');
-                setCurrentView('free-pdfs');
-              }}
-              className="text-xs font-bold text-indigo-600 hover:text-indigo-800"
-            >
-              Browse All Free PDFs →
-            </button>
-          </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-            {user.library.map((item) => (
-              <div key={item.id} className="bg-white rounded-2xl border border-slate-200 p-4 shadow-xs space-y-3">
-                <div className="flex items-center gap-3">
-                  <div className={`w-12 h-16 rounded-lg bg-gradient-to-tr ${item.coverGradient} flex items-center justify-center text-white font-bold text-xs shadow-xs`}>
-                    PDF
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <h4 className="font-bold text-xs text-slate-900 truncate">{item.title}</h4>
-                    <p className="text-[11px] text-slate-500 truncate">{item.author}</p>
-                    <span className="text-[10px] text-indigo-600 font-semibold">{item.fileSize} • {item.totalPages} Pages</span>
-                  </div>
-                </div>
+            {purchasedCatalogBooks.length > 0 && (
+              <div className="space-y-3">
+                <h3 className="text-xs font-black uppercase tracking-wider text-emerald-700 flex items-center gap-1.5">
+                  <CheckCircle2 className="w-4 h-4" />
+                  <span>Unlocked Purchased E-Books &amp; Magazines ({purchasedCatalogBooks.length})</span>
+                </h3>
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {purchasedCatalogBooks.map((book) => (
+                    <div key={book.id} className="bg-white rounded-2xl border border-emerald-200 p-4 shadow-xs space-y-3">
+                      <div className="flex items-center gap-3">
+                        <div className="w-12 h-16 rounded-lg overflow-hidden shrink-0 border border-slate-200 bg-slate-900">
+                          <BookImage book={book} className="w-full h-full object-cover" />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <span className="inline-block px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-700 text-[9px] font-black uppercase mb-0.5">
+                            Full PDF Unlocked
+                          </span>
+                          <h4 className="font-bold text-xs text-slate-900 truncate">{book.title}</h4>
+                          <p className="text-[11px] text-slate-500 truncate">{book.author}</p>
+                          <span className="text-[10px] text-indigo-600 font-semibold">{book.pages} Pages</span>
+                        </div>
+                      </div>
 
-                <div className="pt-2 border-t border-slate-100 flex items-center justify-between gap-2">
-                  <button
-                    onClick={() => setReadingPdf({ title: item.title, url: '/samples/sample.pdf', pages: item.totalPages })}
-                    className="flex-1 py-1.5 rounded-lg bg-indigo-50 hover:bg-indigo-100 text-indigo-700 text-xs font-bold text-center cursor-pointer"
-                  >
-                    Read Online
-                  </button>
-                  <a
-                    href="/samples/sample.pdf"
-                    download
-                    className="p-1.5 rounded-lg border border-slate-200 hover:bg-slate-50 text-slate-600"
-                    title="Download File"
-                  >
-                    <Download className="w-4 h-4" />
-                  </a>
-                </div>
-              </div>
-            ))}
-
-            {savedPdfs.map((pdf) => (
-              <div key={pdf.id} className="bg-white rounded-2xl border border-slate-200 p-4 shadow-xs space-y-3">
-                <div className="flex items-center gap-3">
-                  <div className="w-12 h-16 rounded-lg bg-gradient-to-tr from-cyan-700 to-indigo-900 flex items-center justify-center text-white font-bold text-xs shadow-xs">
-                    PDF
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <h4 className="font-bold text-xs text-slate-900 truncate">{pdf.title}</h4>
-                    <p className="text-[11px] text-slate-500 truncate">{pdf.subject}</p>
-                    <span className="text-[10px] text-emerald-600 font-semibold">{pdf.fileSize} • {pdf.pages} Pages</span>
-                  </div>
-                </div>
-
-                <div className="pt-2 border-t border-slate-100 flex items-center justify-between gap-2">
-                  <button
-                    onClick={() => setReadingPdf({ title: pdf.title, url: pdf.downloadUrl, pages: pdf.pages })}
-                    className="flex-1 py-1.5 rounded-lg bg-indigo-50 hover:bg-indigo-100 text-indigo-700 text-xs font-bold text-center cursor-pointer"
-                  >
-                    Read Online
-                  </button>
-                  <a
-                    href={pdf.downloadUrl}
-                    download
-                    className="p-1.5 rounded-lg border border-slate-200 hover:bg-slate-50 text-slate-600"
-                    title="Download File"
-                  >
-                    <Download className="w-4 h-4" />
-                  </a>
+                      <div className="pt-2 border-t border-slate-100 flex items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => openBookPdfReader(book)}
+                          className="flex-1 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold text-center cursor-pointer"
+                        >
+                          Read Full Online
+                        </button>
+                        <button
+                          type="button"
+                          onClick={async () => {
+                            const res = await triggerPdfOfflineDownload(
+                              book.pdfUrl || book.samplePdfUrl,
+                              book.title,
+                              book.pdfFileName
+                            );
+                            if (res.ok) showToast(`Downloading "${book.title}" PDF offline!`, 'success');
+                            else showToast(res.error || 'PDF file not available yet.', 'info');
+                          }}
+                          className="inline-flex items-center gap-1 px-3 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold cursor-pointer"
+                          title="Download PDF for offline study"
+                        >
+                          <Download className="w-3.5 h-3.5" />
+                          <span>Offline</span>
+                        </button>
+                      </div>
+                    </div>
+                  ))}
                 </div>
               </div>
-            ))}
+            )}
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+              {extraLibraryItems.map((item) => {
+                const catalogMatch = booksCatalog.find(b => b.id === item.bookId);
+                const resolvedPdfUrl = item.pdfUrl || catalogMatch?.pdfUrl || '/samples/sample.pdf';
+                return (
+                  <div key={item.id} className="bg-white rounded-2xl border border-slate-200 p-4 shadow-xs space-y-3">
+                    <div className="flex items-center gap-3">
+                      <div className={`w-12 h-16 rounded-lg bg-gradient-to-tr ${item.coverGradient} flex items-center justify-center text-white font-bold text-xs shadow-xs shrink-0`}>
+                        PDF
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <h4 className="font-bold text-xs text-slate-900 truncate">{item.title}</h4>
+                        <p className="text-[11px] text-slate-500 truncate">{item.author}</p>
+                        <span className="text-[10px] text-indigo-600 font-semibold">{item.fileSize} • {item.totalPages} Pages</span>
+                      </div>
+                    </div>
+
+                    <div className="pt-2 border-t border-slate-100 flex items-center justify-between gap-2">
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setReadingPdf({
+                            title: item.title,
+                            author: item.author,
+                            url: resolvedPdfUrl,
+                            pages: item.totalPages,
+                            bookId: item.bookId,
+                            book: catalogMatch,
+                            isFullUnlocked: true,
+                            allowDownload: true,
+                            fileName: item.pdfFileName || `${item.title}.pdf`
+                          })
+                        }
+                        className="flex-1 py-1.5 rounded-lg bg-indigo-50 hover:bg-indigo-100 text-indigo-700 text-xs font-bold text-center cursor-pointer"
+                      >
+                        Read Online
+                      </button>
+                      <button
+                        type="button"
+                        onClick={async () => {
+                          const res = await triggerPdfOfflineDownload(resolvedPdfUrl, item.title, item.pdfFileName);
+                          if (res.ok) showToast(`Downloading "${item.title}" offline!`, 'success');
+                          else showToast(res.error || 'PDF file not available yet.', 'info');
+                        }}
+                        className="p-1.5 rounded-lg border border-slate-200 hover:bg-slate-50 text-slate-600 cursor-pointer"
+                        title="Download Offline PDF"
+                      >
+                        <Download className="w-4 h-4" />
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+
+              {savedPdfs.map((pdf) => (
+                <div key={pdf.id} className="bg-white rounded-2xl border border-slate-200 p-4 shadow-xs space-y-3">
+                  <div className="flex items-center gap-3">
+                    <div className="w-12 h-16 rounded-lg bg-gradient-to-tr from-cyan-700 to-indigo-900 flex items-center justify-center text-white font-bold text-xs shadow-xs shrink-0">
+                      PDF
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <h4 className="font-bold text-xs text-slate-900 truncate">{pdf.title}</h4>
+                      <p className="text-[11px] text-slate-500 truncate">{pdf.subject}</p>
+                      <span className="text-[10px] text-emerald-600 font-semibold">{pdf.fileSize} • {pdf.pages} Pages</span>
+                    </div>
+                  </div>
+
+                  <div className="pt-2 border-t border-slate-100 flex items-center justify-between gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setReadingPdf({ title: pdf.title, url: pdf.downloadUrl, pages: pdf.pages, isFullUnlocked: true, allowDownload: true })}
+                      className="flex-1 py-1.5 rounded-lg bg-indigo-50 hover:bg-indigo-100 text-indigo-700 text-xs font-bold text-center cursor-pointer"
+                    >
+                      Read Online
+                    </button>
+                    <a
+                      href={pdf.downloadUrl}
+                      download
+                      className="p-1.5 rounded-lg border border-slate-200 hover:bg-slate-50 text-slate-600"
+                      title="Download File"
+                    >
+                      <Download className="w-4 h-4" />
+                    </a>
+                  </div>
+                </div>
+              ))}
+            </div>
           </div>
-        </div>
-      )}
+        );
+      })()}
 
       {/* TAB 4: BooksBoon Hard Copy Orders */}
       {accountTab === 'orders' && (

@@ -15,6 +15,7 @@ import {
   ChevronLeft 
 } from 'lucide-react';
 import { BookImage } from '../components/BookImage';
+import { getBookUnitPrice, isDigitalOnlyCart } from '../utils/bookHelpers';
 
 export const CartView: React.FC = () => {
   const { 
@@ -34,7 +35,8 @@ export const CartView: React.FC = () => {
   const [selectedPayment, setSelectedPayment] = useState<'upi' | 'card' | 'cod'>('upi');
   const [orderPlaced, setOrderPlaced] = useState<string | null>(null);
 
-  const deliveryFee = cartSubtotal >= 499 || cartSubtotal === 0 ? 0 : 50;
+  const digitalOnly = isDigitalOnlyCart(cart);
+  const deliveryFee = digitalOnly || cartSubtotal >= 499 || cartSubtotal === 0 ? 0 : 50;
   const finalTotal = Math.max(0, cartSubtotal + deliveryFee - discountAmount);
 
   const handleApplyCoupon = (e: React.FormEvent) => {
@@ -160,12 +162,10 @@ export const CartView: React.FC = () => {
         <div className="lg:col-span-8 space-y-4">
           <div className="bg-white rounded-3xl border border-slate-200 divide-y divide-slate-100 shadow-xs overflow-hidden">
             {cart.map((item) => {
-              const unitPrice = item.format === 'Paperback' 
-                ? item.book.paperbackPrice 
-                : Math.round(item.book.paperbackPrice * 0.45);
+              const unitPrice = getBookUnitPrice(item.book, item.format);
 
               return (
-                <div key={item.book.id} className="p-6 flex flex-col sm:flex-row gap-5 items-start sm:items-center justify-between">
+                <div key={`${item.book.id}-${item.format}`} className="p-6 flex flex-col sm:flex-row gap-5 items-start sm:items-center justify-between">
                   
                   <div className="flex items-center gap-4">
                     {/* Visual Cover */}
@@ -240,28 +240,40 @@ export const CartView: React.FC = () => {
             })}
           </div>
 
-          {/* Delivery Address Review */}
-          <div className="bg-white rounded-3xl border border-slate-200 p-6 shadow-xs space-y-3">
-            <div className="flex items-center justify-between">
-              <h3 className="text-sm font-bold text-slate-900 font-display flex items-center gap-2">
-                <MapPin className="w-4 h-4 text-indigo-600" />
-                <span>Shipping Address</span>
+          {/* Delivery Address / Instant Digital Delivery Review */}
+          {digitalOnly ? (
+            <div className="bg-emerald-50/70 rounded-3xl border border-emerald-200 p-6 shadow-xs space-y-2">
+              <h3 className="text-sm font-bold text-emerald-900 font-display flex items-center gap-2">
+                <ShieldCheck className="w-4 h-4 text-emerald-600" />
+                <span>Instant Digital PDF Unlock (Zero Shipping Fee)</span>
               </h3>
-              <button
-                onClick={() => setCurrentView('account')}
-                className="text-xs text-indigo-600 hover:underline font-semibold cursor-pointer"
-              >
-                Change Address
-              </button>
+              <p className="text-xs text-emerald-800 leading-relaxed">
+                Complete payment to immediately unlock the full PDF for online reading on BooksBoon and offline download to your device.
+              </p>
             </div>
+          ) : (
+            <div className="bg-white rounded-3xl border border-slate-200 p-6 shadow-xs space-y-3">
+              <div className="flex items-center justify-between">
+                <h3 className="text-sm font-bold text-slate-900 font-display flex items-center gap-2">
+                  <MapPin className="w-4 h-4 text-indigo-600" />
+                  <span>Shipping Address</span>
+                </h3>
+                <button
+                  onClick={() => setCurrentView('account')}
+                  className="text-xs text-indigo-600 hover:underline font-semibold cursor-pointer"
+                >
+                  Change Address
+                </button>
+              </div>
 
-            <p className="text-xs text-slate-700">
-              Deliver to: <strong>{user ? user.name : 'Mohit Shukla'}</strong> · {user ? user.phone : '+91 97737-40485'}
-            </p>
-            <p className="text-xs text-slate-500">
-              {user ? `${user.address.street}, ${user.address.city}, ${user.address.state} - ${user.address.pinCode}` : 'Ward No 24, Near Nehru Park, Chawani, Neem Ka Thana, Rajasthan - 332713'}
-            </p>
-          </div>
+              <p className="text-xs text-slate-700">
+                Deliver to: <strong>{user ? user.name : 'Mohit Shukla'}</strong> · {user ? user.phone : '+91 97737-40485'}
+              </p>
+              <p className="text-xs text-slate-500">
+                {user ? `${user.address.street}, ${user.address.city}, ${user.address.state} - ${user.address.pinCode}` : 'Ward No 24, Near Nehru Park, Chawani, Neem Ka Thana, Rajasthan - 332713'}
+              </p>
+            </div>
+          )}
         </div>
 
         {/* Right Column: Order Summary & Checkout */}
@@ -280,7 +292,7 @@ export const CartView: React.FC = () => {
               <div className="flex justify-between items-center">
                 <span className="flex items-center gap-1.5">
                   <Truck className="w-3.5 h-3.5 text-slate-400" />
-                  <span>Tracked Courier Shipping</span>
+                  <span>{digitalOnly ? 'Instant Digital PDF Unlock' : 'Tracked Courier Shipping'}</span>
                 </span>
                 <span className="font-semibold text-slate-900 font-mono">
                   {deliveryFee === 0 ? <strong className="text-emerald-600">FREE</strong> : `₹${deliveryFee}`}
@@ -358,21 +370,23 @@ export const CartView: React.FC = () => {
                   </div>
                 </label>
 
-                <label className={`flex items-center gap-3 p-3 rounded-xl border cursor-pointer transition-all ${
-                  selectedPayment === 'cod' ? 'border-indigo-600 bg-indigo-50/50' : 'border-slate-200'
-                }`}>
-                  <input
-                    type="radio"
-                    name="payment"
-                    checked={selectedPayment === 'cod'}
-                    onChange={() => setSelectedPayment('cod')}
-                    className="accent-indigo-600"
-                  />
-                  <div className="flex-1">
-                    <p className="font-bold text-slate-900">Cash on Delivery (COD)</p>
-                    <p className="text-[11px] text-slate-500">Pay cash upon delivery by courier</p>
-                  </div>
-                </label>
+                {!digitalOnly && (
+                  <label className={`flex items-center gap-3 p-3 rounded-xl border cursor-pointer transition-all ${
+                    selectedPayment === 'cod' ? 'border-indigo-600 bg-indigo-50/50' : 'border-slate-200'
+                  }`}>
+                    <input
+                      type="radio"
+                      name="payment"
+                      checked={selectedPayment === 'cod'}
+                      onChange={() => setSelectedPayment('cod')}
+                      className="accent-indigo-600"
+                    />
+                    <div className="flex-1">
+                      <p className="font-bold text-slate-900">Cash on Delivery (COD)</p>
+                      <p className="text-[11px] text-slate-500">Pay cash upon delivery by courier</p>
+                    </div>
+                  </label>
+                )}
               </div>
             </div>
 
